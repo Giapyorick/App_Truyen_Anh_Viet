@@ -157,12 +157,17 @@ fun ReadingScreen(
         if (!isLoading && storyId.isNotEmpty()) {
              val user = FirebaseAuth.getInstance().currentUser
              if (user != null) {
-                 val doc = db.collection("users").document(user.uid)
-                     .collection("library").document(storyId)
-                     .get().await()
-                 val savedIndex = doc.getLong("scrollIndex")?.toInt() ?: 0
-                 if (savedIndex > 0 && savedIndex < displayChapter.paragraphs.size + 1) {
-                     listState.scrollToItem(savedIndex)
+                 try {
+                     val doc = db.collection("users").document(user.uid)
+                         .collection("library").document(storyId)
+                         .get().await()
+                     val savedIndex = doc.getLong("scrollIndex")?.toInt() ?: 0
+                     if (savedIndex > 0 && savedIndex < (currentChapter?.paragraphs?.size ?: 0) + 1) {
+                         listState.scrollToItem(savedIndex)
+                     }
+                 } catch (e: Exception) {
+                     e.printStackTrace()
+                     // Ignore error when fetching progress, just start from beginning
                  }
              }
         }
@@ -204,12 +209,19 @@ fun ReadingScreen(
                 onSaveClick = {
                     val user = FirebaseAuth.getInstance().currentUser
                     if (user != null && storyData != null) {
-                        db.collection("users").document(user.uid)
-                            .collection("library").document(storyId)
-                            .set(storyData!!)
-                            .addOnSuccessListener {
-                                Toast.makeText(context, "Đã lưu vào thư viện", Toast.LENGTH_SHORT).show()
-                            }
+                        try {
+                            db.collection("users").document(user.uid)
+                                .collection("library").document(storyId)
+                                .set(storyData!!)
+                                .addOnSuccessListener {
+                                    Toast.makeText(context, "Đã lưu vào thư viện", Toast.LENGTH_SHORT).show()
+                                }
+                                .addOnFailureListener { e ->
+                                    Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
                         Toast.makeText(context, "Vui lòng đăng nhập để lưu", Toast.LENGTH_SHORT).show()
                     }
@@ -450,7 +462,7 @@ fun AIChatAssistant(isDarkMode: Boolean) {
     val scope = rememberCoroutineScope()
     
     // === BƯỚC QUAN TRỌNG: DÁN API KEY CỦA BẠN VÀO GIỮA DẤU "" DƯỚI ĐÂY ===
-    val rawApiKey = ""
+    val rawApiKey = "Keyyyyy"
     
     // Tự động xử lý Header để đảm bảo định dạng "Bearer <API_KEY>"
     val authHeader = remember(rawApiKey) {

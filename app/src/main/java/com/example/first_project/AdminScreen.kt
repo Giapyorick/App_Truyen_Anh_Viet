@@ -1,5 +1,6 @@
 package com.example.first_project
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -9,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -49,6 +51,11 @@ fun AdminDashboard(
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.Home, contentDescription = "Home")
                     }
                 },
                 actions = {
@@ -192,7 +199,7 @@ fun AdminDashboard(
                         Text("View All", style = MaterialTheme.typography.labelLarge, color = Color.Black)
                     }
                 }
-                
+
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Header for table
                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
@@ -201,13 +208,13 @@ fun AdminDashboard(
                         Text("TIMESTAMP", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                         Text("STATUS", modifier = Modifier.weight(0.8f), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                     }
-                    
+
                     ActivityRow("New Story Published", "\"The Quiet Forest\"", "2 mins ago", "SUCCESS", isSuccess = true)
                     ActivityRow("New Author Verified", "Trần Minh Anh", "15 mins ago", "SUCCESS", isSuccess = true)
                     ActivityRow("Translation Conflict", "\"Echoes of Silence\"", "1 hour ago", "ALERT", isSuccess = false)
                 }
             }
-            
+
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
@@ -237,6 +244,26 @@ fun ManagementItem(title: String, subtitle: String, icon: ImageVector, onClick: 
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
             Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = Color.Gray)
+        }
+    }
+}
+
+@Composable
+fun FilterButton(text: String, icon: ImageVector) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, Color.LightGray),
+        color = Color.White,
+        modifier = Modifier.height(36.dp).clickable { }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -310,7 +337,7 @@ fun ActivityRow(activity: String, target: String, time: String, status: String, 
         }
         Text(target, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         Text(time, modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-        
+
         Surface(
             modifier = Modifier.weight(0.8f),
             color = if (isSuccess) SuccessGreen else AlertRed,

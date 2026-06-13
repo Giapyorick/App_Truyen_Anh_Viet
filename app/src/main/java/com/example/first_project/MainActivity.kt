@@ -17,11 +17,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.first_project.admin.AuthorAdminScreen
 import com.example.first_project.admin.CategoryAdminScreen
 import com.example.first_project.admin.StoryAdminScreen
+import com.example.first_project.admin.ChapterAdminScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,10 +36,13 @@ class MainActivity : ComponentActivity() {
                 var selectedStoryId by remember { mutableStateOf("") }
                 var selectedChapterId by remember { mutableStateOf("") }
 
-                // Tự động chuyển hướng nếu là admin khi isAdmin thay đổi
-                if (authViewModel.isAdmin && currentScreen == "home") {
-                    // Bạn có thể thêm nút "Vào trang Admin" ở HomeScreen 
-                    // hoặc tự động chuyển hướng tùy ý.
+                // Check for existing session and role
+                LaunchedEffect(Unit) {
+                    val user = authViewModel.currentUser
+                    if (user != null) {
+                        authViewModel.checkUserRole(user.uid)
+                        currentScreen = "home"
+                    }
                 }
 
                 when (currentScreen) {
@@ -58,7 +63,15 @@ class MainActivity : ComponentActivity() {
                         onBack = { currentScreen = "admin" }
                     )
                     "admin_stories" -> StoryAdminScreen(
-                        onBack = { currentScreen = "admin" }
+                        onBack = { currentScreen = "admin" },
+                        onManageChapters = { storyId ->
+                            selectedStoryId = storyId
+                            currentScreen = "admin_chapters"
+                        }
+                    )
+                    "admin_chapters" -> ChapterAdminScreen(
+                        storyId = selectedStoryId,
+                        onBack = { currentScreen = "admin_stories" }
                     )
                     "admin_categories" -> CategoryAdminScreen(
                         onBack = { currentScreen = "admin" }
@@ -80,7 +93,11 @@ class MainActivity : ComponentActivity() {
                             currentScreen = "reading"
                         },
                         onNavigateToLibrary = { currentScreen = "library" },
-                        onNavigateToExplore = { /* TODO */ }
+                        onNavigateToExplore = { /* TODO */ },
+                        onLogout = {
+                            authViewModel.logout()
+                            currentScreen = "login"
+                        }
                     )
                     "library" -> LibraryScreen(
                         onNavigateToHome = { currentScreen = "home" },

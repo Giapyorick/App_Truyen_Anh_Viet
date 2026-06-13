@@ -141,7 +141,19 @@ fun LoginScreen(
                     )
 
                     TextButton(
-                        onClick = { /* Handle Forgot Password */ },
+                        onClick = {
+                            if (email.isEmpty()) {
+                                Toast.makeText(context, "Vui lòng nhập email để đặt lại mật khẩu", Toast.LENGTH_SHORT).show()
+                                return@TextButton
+                            }
+                            viewModel.resetPassword(email) { success, error ->
+                                if (success) {
+                                    Toast.makeText(context, "Email đặt lại mật khẩu đã được gửi!", Toast.LENGTH_LONG).show()
+                                } else {
+                                    Toast.makeText(context, "Lỗi: $error", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Text(text = "Quên mật khẩu?", color = ReadingDarkGreen, fontSize = 14.sp)

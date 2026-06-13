@@ -26,8 +26,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.first_project.ui.theme.ReadingDarkGreen
 import com.google.firebase.firestore.FirebaseFirestore
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +43,8 @@ fun BookDetailScreen(
 
     var userStoryData by remember { mutableStateOf<Story?>(null) }
 
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
     LaunchedEffect(storyId) {
         val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         if (user != null) {
@@ -53,48 +53,75 @@ fun BookDetailScreen(
                 .get()
                 .addOnSuccessListener { doc ->
                     if (doc.exists()) {
-                        userStoryData = doc.toObject(Story::class.java)
+                        userStoryData = Story.fromSnapshot(doc)
                     }
                 }
         }
-        
+
         db.collection("stories").document(storyId).get()
             .addOnSuccessListener { document ->
-                val s = document.toObject(Story::class.java)?.apply { id = document.id }
-                story = s
-                
-                // Fetch Author Name
-                s?.authorId?.let { uid ->
-                    if (uid.isNotEmpty()) {
-                        db.collection("authors").document(uid).get()
-                            .addOnSuccessListener { authDoc ->
-                                authorName = authDoc.getString("authorName") ?: "Ẩn danh"
+                if (document.exists()) {
+                    val s = Story.fromSnapshot(document)
+                    story = s
+                    chapters = s?.chapters?.sortedBy { it.chapterNumber } ?: emptyList()
+                    
+                    // Fetch Author Name
+                    s?.authorId?.let { uid ->
+                        if (uid.isNotEmpty()) {
+                            db.collection("authors").document(uid).get()
+                                .addOnSuccessListener { authDoc ->
+                                    authorName = authDoc.getString("authorName") ?: "Ẩn danh"
+                                }
+                                .addOnFailureListener {
+                                    authorName = "Chưa rõ"
+                                }
+                        } else {
+                            authorName = "Chưa rõ"
+                        }
+                    }
+
+                    // Fetch Category Names
+                    val catIds = s?.getCategoryIdsAsStrings()?.distinct()
+                    if (catIds?.isNotEmpty() == true) {
+                        db.collection("categories")
+                            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), catIds.take(10))
+                            .get()
+                            .addOnSuccessListener { catSnap ->
+                                categoryNames = catSnap.documents.mapNotNull { it.getString("name") }
+                            }
+                    }
+                    
+                    // Nếu đã có chapters trong story (nhúng), chúng ta đã gán ở trên.
+                    // Chỉ tải thêm từ sub-collection nếu thực sự cần thiết hoặc nếu danh sách nhúng rỗng.
+                    if (chapters.isEmpty()) {
+                        db.collection("stories").document(storyId).collection("chapters")
+                            .orderBy("chapterNumber")
+                            .get() // Dùng get thay vì listener để tránh ghi đè liên tục nếu không cần
+                            .addOnSuccessListener { value ->
+                                if (value != null && !value.isEmpty) {
+                                    chapters = value.documents.mapNotNull { doc ->
+                                        try {
+                                            doc.toObject(Chapter::class.java)?.apply { id = doc.id }
+                                        } catch (e: Exception) {
+                                            null
+                                        }
+                                    }
+                                }
+                                isLoading = false
+                            }
+                            .addOnFailureListener {
+                                isLoading = false
                             }
                     } else {
-                        authorName = "Chưa rõ"
+                        isLoading = false
                     }
-                }
-
-                // Fetch Category Names
-                val catIds = s?.getCategoryIdsStrings()
-                if (catIds?.isNotEmpty() == true) {
-                    db.collection("categories")
-                        .whereIn(com.google.firebase.firestore.FieldPath.documentId(), catIds)
-                        .get()
-                        .addOnSuccessListener { catSnap ->
-                            categoryNames = catSnap.documents.mapNotNull { it.getString("name") }
-                        }
+                } else {
+                    errorMessage = "Không tìm thấy truyện này"
+                    isLoading = false
                 }
             }
-        
-        db.collection("stories").document(storyId).collection("chapters")
-            .orderBy("chapterNumber")
-            .addSnapshotListener { value, error ->
-                if (value != null) {
-                    chapters = value.documents.mapNotNull { doc ->
-                        doc.toObject(Chapter::class.java)?.apply { id = doc.id }
-                    }
-                }
+            .addOnFailureListener { e ->
+                errorMessage = "Lỗi kết nối: ${e.localizedMessage}"
                 isLoading = false
             }
     }
@@ -128,20 +155,32 @@ fun BookDetailScreen(
         },
         bottomBar = {
             if (story != null && chapters.isNotEmpty()) {
-                val startChapterId = userStoryData?.lastChapterId ?: chapters.first().id
-                val startChapterNum = userStoryData?.lastChapterNumber ?: chapters.first().chapterNumber
+                val startChapterId = userStoryData?.lastChapterId ?: chapters.firstOrNull()?.id ?: ""
+                val startChapterNum = userStoryData?.lastChapterNumber ?: chapters.firstOrNull()?.chapterNumber ?: 1
                 
-                DetailBottomBar(
-                    onReadNow = { onChapterClick(startChapterId) },
-                    buttonText = if (userStoryData?.lastChapterId != null) "Tiếp tục đọc (Chương $startChapterNum)" else "Bắt đầu đọc",
-                    story = story
-                )
+                if (startChapterId.isNotEmpty()) {
+                    DetailBottomBar(
+                        onReadNow = { onChapterClick(startChapterId) },
+                        buttonText = if (userStoryData?.lastChapterId != null) "Tiếp tục đọc (Chương $startChapterNum)" else "Bắt đầu đọc",
+                        story = story
+                    )
+                }
             }
         }
     ) { paddingValues ->
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = ReadingDarkGreen)
+            }
+        } else if (errorMessage != null) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(errorMessage!!, color = Color.Gray)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onBack, colors = ButtonDefaults.buttonColors(containerColor = ReadingDarkGreen)) {
+                        Text("Quay lại")
+                    }
+                }
             }
         } else {
             LazyColumn(
@@ -190,12 +229,6 @@ fun BookDetailScreen(
 
 @Composable
 fun BookHeaderSection(story: Story, authorName: String) {
-    val imagePath = if (story.img.startsWith("assets/")) {
-        "file:///android_asset/${story.img.removePrefix("assets/")}"
-    } else {
-        story.img
-    }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -210,7 +243,7 @@ fun BookHeaderSection(story: Story, authorName: String) {
         ) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
-                    .data(imagePath)
+                    .data(story.resolveImagePath())
                     .crossfade(true)
                     .build(),
                 contentDescription = story.title,
@@ -264,27 +297,37 @@ fun BookHeaderSection(story: Story, authorName: String) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CategoryChipsSection(categoryNames: List<String>) {
-    FlowRow(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        categoryNames.forEach { name ->
-            Surface(
-                color = ReadingDarkGreen.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(16.dp)
+        // Standardized chunked layout to avoid FlowRow binary incompatibilities
+        val chunks = categoryNames.chunked(3)
+        chunks.forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = name,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = ReadingDarkGreen
-                )
+                rowItems.forEach { name ->
+                    Surface(
+                        color = ReadingDarkGreen.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        Text(
+                            text = name,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ReadingDarkGreen,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }

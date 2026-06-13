@@ -1,0 +1,48 @@
+{
+  "id": "story_001",
+  "title": "The Great Adventure",
+  "authorId": "author_001",
+  "description": "An epic journey through the unknown lands of the North.",
+  "status": "Ongoing",
+  "img": "assets/sample_cover.jpg",
+  "likes": 120,
+  "rate": 4.5,
+  "count_follower": 50,
+  "count_rate": 10,
+  "categoryIds": ["cat_001", "cat_002"],
+  "categoryIdsStrings": ["Fantasy", "Adventure"],
+  "publicationDate": "2023-10-27",
+  "chapters": [
+    {
+      "id": "chapter_001",
+      "chapterNumber": 1,
+      "title": "The Beginning",
+      "createdDate": "2023-10-27",
+      "paragraphs": [
+        {
+          "paragraphOrder": 1,
+          "english": "Once upon a time, in a land far away...",
+          "vietnamese": "Ngày xửa ngày xưa, ở một vùng đất xa xôi..."
+        },
+        {
+          "paragraphOrder": 2,
+          "english": "There lived a young explorer named Leo.",
+          "vietnamese": "Có một nhà thám hiểm trẻ tuổi tên là Leo."
+        }
+      ]
+    },
+    {
+      "id": "chapter_002",
+      "chapterNumber": 2,
+      "title": "Into the Forest",
+      "createdDate": "2023-10-28",
+      "paragraphs": [
+        {
+          "paragraphOrder": 1,
+          "english": "Leo entered the dark forest with courage.",
+          "vietnamese": "Leo dũng cảm bước vào khu rừng tối."
+        }
+      ]
+    }
+  ]
+}

@@ -49,6 +49,7 @@ import com.example.first_project.InfoText
 import com.example.first_project.LabelText
 import com.example.first_project.TransparentTextField
 import com.example.first_project.StatusBadge
+import com.example.first_project.FilterButton
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -160,15 +161,15 @@ fun AuthorAdminScreen(
                 Icon(Icons.Default.Add, contentDescription = "Add")
             }
         },
-        bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(icon = { Icon(Icons.Default.Explore, null) }, label = { Text("Explore") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, label = { Text("Library") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.Translate, null) }, label = { Text("Words") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.AccountCircle, null) }, label = { Text("Account") }, selected = true, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.Stars, null) }, label = { Text("Premium") }, selected = false, onClick = {})
-            }
-        }
+//        bottomBar = {
+//            NavigationBar(containerColor = Color.White) {
+//                NavigationBarItem(icon = { Icon(Icons.Default.Explore, null) }, label = { Text("Explore") }, selected = false, onClick = {})
+//                NavigationBarItem(icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, label = { Text("Library") }, selected = false, onClick = {})
+//                NavigationBarItem(icon = { Icon(Icons.Default.Translate, null) }, label = { Text("Words") }, selected = false, onClick = {})
+//                NavigationBarItem(icon = { Icon(Icons.Default.AccountCircle, null) }, label = { Text("Account") }, selected = true, onClick = {})
+//                NavigationBarItem(icon = { Icon(Icons.Default.Stars, null) }, label = { Text("Premium") }, selected = false, onClick = {})
+//            }
+//        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -266,26 +267,6 @@ fun AuthorAdminScreenPreview() {
 }
 
 @Composable
-fun FilterButton(text: String, icon: ImageVector) {
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(1.dp, Color.LightGray),
-        color = Color.White,
-        modifier = Modifier.height(36.dp).clickable { }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
 fun AuthorItem(author: Author, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onEdit() },
@@ -296,7 +277,7 @@ fun AuthorItem(author: Author, onEdit: () -> Unit, onDelete: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 AsyncImage(
-                    model = if (author.img.startsWith("/")) java.io.File(author.img) else author.img,
+                    model = author.resolveImagePath(),
                     contentDescription = null,
                     modifier = Modifier
                         .width(60.dp)
@@ -314,15 +295,15 @@ fun AuthorItem(author: Author, onEdit: () -> Unit, onDelete: () -> Unit) {
                         StatusBadge(author.status)
                     }
                     Text(author.country, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     IconInfoRow(Icons.Default.MailOutline, author.email)
                     Spacer(modifier = Modifier.height(4.dp))
                     IconInfoRow(Icons.Default.Cake, author.dob)
                 }
             }
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = AlertText, modifier = Modifier.size(20.dp))
@@ -446,7 +427,12 @@ fun AuthorEditDialog(
                 if (selectedImageUri != null) {
                     AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else if (imgUrl.isNotEmpty()) {
-                    AsyncImage(model = imgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    AsyncImage(
+                        model = (author?.copy(img = imgUrl) ?: Author(img = imgUrl)).resolveImagePath(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(48.dp), tint = Color.LightGray)

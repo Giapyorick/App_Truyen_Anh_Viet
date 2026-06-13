@@ -1,0 +1,44 @@
+{
+  "categories": [
+    {
+      "id": "cat_001",
+      "name": "Hành động",
+      "description": "Thể loại bao gồm các tình tiết kịch tính, chiến đấu.",
+      "status": "Active"
+    },
+    {
+      "id": "cat_002",
+      "name": "Phiêu lưu",
+      "description": "Khám phá những vùng đất mới và những thử thách thú vị.",
+      "status": "Active"
+    },
+    {
+      "id": "cat_003",
+      "name": "Lãng mạn",
+      "description": "Câu chuyện về tình yêu và cảm xúc.",
+      "status": "Active"
+    }
+  ],
+  "authors": [
+    {
+      "id": "author_001",
+      "authorName": "Nguyễn Nhật Ánh",
+      "email": "nna@example.com",
+      "dob": "1955-05-07",
+      "gender": "Nam",
+      "country": "Việt Nam",
+      "img": "assets/authors/nna.jpg",
+      "status": "Active"
+    },
+    {
+      "id": "author_002",
+      "authorName": "J.K. Rowling",
+      "email": "jkrowling@example.com",
+      "dob": "1965-07-31",
+      "gender": "Nữ",
+      "country": "Anh",
+      "img": "assets/authors/jk.jpg",
+      "status": "Active"
+    }
+  ]
+}

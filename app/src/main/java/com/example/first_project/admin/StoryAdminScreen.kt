@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -45,6 +46,7 @@ import com.example.first_project.InfoText
 import com.example.first_project.LabelText
 import com.example.first_project.TransparentTextField
 import com.example.first_project.StatusBadge
+import com.example.first_project.FilterButton
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -54,6 +56,7 @@ import java.util.Locale
 @Composable
 fun StoryAdminScreen(
     onBack: () -> Unit,
+    onManageChapters: (String) -> Unit,
     viewModel: StoryAdminViewModel = viewModel()
 ) {
     val stories by viewModel.stories.collectAsState()
@@ -92,19 +95,11 @@ fun StoryAdminScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
-
-
-
-
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-
-
-
-
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
             )
@@ -121,15 +116,7 @@ fun StoryAdminScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add")
             }
-
-
-
-
         }
-
-
-
-
     ) { padding ->
         Column(
             modifier = Modifier
@@ -151,6 +138,16 @@ fun StoryAdminScreen(
                 ),
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FilterButton("Filter", Icons.Default.FilterList)
+                FilterButton("Sort", Icons.AutoMirrored.Filled.Sort)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedTextField(
                 value = searchQuery,
@@ -184,43 +181,15 @@ fun StoryAdminScreen(
                         },
                         onDelete = {
                             viewModel.deleteStory(story.id) { }
-
-
-
-
-                        }
-
-
-
-
+                        },
+                        onManageChapters = { onManageChapters(story.id) }
                     )
                 }
-
-
-
-
             }
-
-
-
-
         }
-
-
-
-
     }
-
-
-
-
-
     if (showDialog) {
         BackHandler { showDialog = false }
-
-
-
-
         StoryEditDialog(
             story = selectedStory,
             viewModel = viewModel,
@@ -228,32 +197,12 @@ fun StoryAdminScreen(
             onConfirm = { story ->
                 if (selectedStory == null) {
                     viewModel.addStory(story) { showDialog = false }
-
-
-
-
                 } else {
                     viewModel.updateStory(story) { showDialog = false }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
         )
     }
-
-
-
-
 }
 
 
@@ -266,19 +215,7 @@ fun StoryAdminScreen(
 
 
 @Composable
-fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val imagePath = if (story.img.startsWith("assets/")) {
-        "file:///android_asset/${story.img.removePrefix("assets/")}"
-    } else if (story.img.startsWith("/")) {
-        java.io.File(story.img)
-    } else {
-        story.img
-    }
-
-
-
-
-
+fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit, onManageChapters: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onEdit() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -287,7 +224,7 @@ fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             AsyncImage(
-                model = imagePath,
+                model = story.resolveImagePath(),
                 contentDescription = null,
                 modifier = Modifier
                     .width(60.dp)
@@ -306,45 +243,22 @@ fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
                     StatusBadge(story.status)
                 }
 
-
-
-
                 Text(story.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 2)
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(onClick = { onManageChapters() }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Menu, contentDescription = "Chapters", tint = DarkGreen, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
                     IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = AlertText, modifier = Modifier.size(18.dp))
                     }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
         }
-
-
-
-
     }
-
-
-
-
 }
-
-
-
-
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -355,76 +269,23 @@ fun StoryEditDialog(
     onConfirm: (Story) -> Unit
 ) {
     var title by remember { mutableStateOf(story?.title ?: "") }
-
-
-
-
     var description by remember { mutableStateOf(story?.description ?: "") }
-
-
-
-
     var publicationDate by remember { mutableStateOf(story?.publicationDate ?: "") }
-
-
-
-
     var status by remember { mutableStateOf(story?.status ?: "In-progress") }
-
-
-
-
     var authorId by remember { mutableStateOf(story?.authorId ?: "") }
-
-
-
-
     var imgUrl by remember { mutableStateOf(story?.img ?: "") }
-
-
-
-
     var selectedCategoryIds by remember { mutableStateOf(story?.categoryIds?.map { it.toString() } ?: emptyList<String>()) }
-
-
-
-
-    
     var showDatePicker by remember { mutableStateOf(false) }
-
-
-
-
     val datePickerState = rememberDatePickerState()
-
     val dateFormatter = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()) }
-
-
-
-
-    
     val categories by viewModel.categories.collectAsState()
     val authors by viewModel.authors.collectAsState()
-    
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
-
-
-
-
     var isUploading by remember { mutableStateOf(false) }
-
-
-
-
     val context = LocalContext.current
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> selectedImageUri = uri }
-
-
-
-
-
     val onSave = {
         if (selectedImageUri != null) {
             isUploading = true
@@ -437,6 +298,7 @@ fun StoryEditDialog(
                     status = status,
                     authorId = authorId,
                     categoryIds = selectedCategoryIds.distinct(),
+                    categoryIdsStrings = selectedCategoryIds.distinct(),
                     img = localPath
                 ) ?: Story(
                     title = title,
@@ -445,6 +307,7 @@ fun StoryEditDialog(
                     status = status,
                     authorId = authorId,
                     categoryIds = selectedCategoryIds.distinct(),
+                    categoryIdsStrings = selectedCategoryIds.distinct(),
                     img = localPath
                 ))
                 onConfirm(updated)
@@ -457,6 +320,7 @@ fun StoryEditDialog(
                 status = status,
                 authorId = authorId,
                 categoryIds = selectedCategoryIds.distinct(),
+                categoryIdsStrings = selectedCategoryIds.distinct(),
                 img = imgUrl
             ) ?: Story(
                 title = title,
@@ -465,20 +329,12 @@ fun StoryEditDialog(
                 status = status,
                 authorId = authorId,
                 categoryIds = selectedCategoryIds.distinct(),
+                categoryIdsStrings = selectedCategoryIds.distinct(),
                 img = imgUrl
             ))
             onConfirm(updated)
         }
-
-
-
-
     }
-
-
-
-
-
     Scaffold(
         containerColor = AdminBg,
         topBar = {
@@ -487,10 +343,6 @@ fun StoryEditDialog(
                 navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
                 actions = {
                     TextButton(onClick = {}) { Text("Draft", color = Color.Gray) }
-
-
-
-
                     Button(
                         onClick = onSave,
                         colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
@@ -500,18 +352,10 @@ fun StoryEditDialog(
                         if (isUploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                         else Text("Save Story", color = Color.White)
                     }
-
-
-
-
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
             )
         }
-
-
-
-
     ) { padding ->
         Column(
             modifier = Modifier
@@ -547,42 +391,22 @@ fun StoryEditDialog(
                     .clickable { imagePickerLauncher.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
-                val displayImg = if (imgUrl.startsWith("assets/")) {
-                    "file:///android_asset/${imgUrl.removePrefix("assets/")}"
-                } else if (imgUrl.startsWith("/")) {
-                    java.io.File(imgUrl)
-                } else {
-                    imgUrl
-                }
-
-
-
-
-
                 if (selectedImageUri != null) {
                     AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else if (imgUrl.isNotEmpty()) {
-                    AsyncImage(model = displayImg, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    AsyncImage(
+                        model = (story?.copy(img = imgUrl) ?: Story(img = imgUrl)).resolveImagePath(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(48.dp), tint = Color.LightGray)
                         Text("Add Story Cover", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
-
             LabelText("DESCRIPTION")
             OutlinedTextField(
                 value = description,
@@ -785,13 +609,13 @@ fun StoryEditDialog(
 
 
                                         },
-                                        label = { 
+                                        label = {
                                             Text(
-                                                cat.name, 
+                                                cat.name,
                                                 fontSize = 12.sp,
                                                 maxLines = 1,
                                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                            ) 
+                                            )
                                         },
                                         colors = FilterChipDefaults.filterChipColors(
                                             selectedContainerColor = DarkGreen,
@@ -850,7 +674,7 @@ fun StoryEditDialog(
 
 
 
-                    
+
                     var expanded by remember { mutableStateOf(false) }
 
 
@@ -861,7 +685,7 @@ fun StoryEditDialog(
 
 
 
-                    
+
                     Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
                         Surface(
                             modifier = Modifier.fillMaxWidth().clickable { expanded = true },
@@ -871,7 +695,7 @@ fun StoryEditDialog(
                             Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 if (currentAuthor != null) {
                                     AsyncImage(
-                                        model = if (currentAuthor.img.startsWith("/")) java.io.File(currentAuthor.img) else currentAuthor.img,
+                                        model = currentAuthor.resolveImagePath(),
                                         contentDescription = null,
                                         modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
                                         contentScale = ContentScale.Crop
@@ -903,7 +727,7 @@ fun StoryEditDialog(
 
 
 
-                        
+
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             authors.forEach { author ->
                                 DropdownMenuItem(

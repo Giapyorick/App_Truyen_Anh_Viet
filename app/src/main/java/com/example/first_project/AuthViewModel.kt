@@ -86,4 +86,24 @@ class AuthViewModel : ViewModel() {
             isAdmin = doc.getString("role") == "admin"
         }
     }
+
+    fun logout() {
+        auth.signOut()
+        isAdmin = false
+    }
+
+    fun resetPassword(email: String, onResult: (Boolean, String?) -> Unit) {
+        if (email.isBlank()) {
+            onResult(false, "Vui lòng nhập email")
+            return
+        }
+        auth.sendPasswordResetEmail(email)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    onResult(true, null)
+                } else {
+                    onResult(false, task.exception?.message)
+                }
+            }
+    }
 }

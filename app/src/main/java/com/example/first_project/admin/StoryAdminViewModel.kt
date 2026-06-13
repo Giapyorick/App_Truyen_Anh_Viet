@@ -34,31 +34,7 @@ class StoryAdminViewModel : ViewModel() {
             try {
                 val snapshot = db.collection("stories").get().await()
                 val list = snapshot.documents.mapNotNull { doc ->
-                    try {
-                        doc.toObject(Story::class.java)?.apply { id = doc.id }
-                    } catch (e: Exception) {
-                        val data = doc.data
-                        if (data != null) {
-                            Story(
-                                id = doc.id,
-                                title = data["title"] as? String ?: "",
-                                authorId = data["authorId"] as? String ?: "",
-                                description = data["description"] as? String ?: "",
-                                status = data["status"] as? String ?: "",
-                                img = data["img"] as? String ?: "",
-                                likes = (data["likes"] as? Long)?.toInt() ?: 0,
-                                rate = (data["rate"] as? Number)?.toDouble() ?: 0.0,
-                                count_follower = (data["count_follower"] as? Long)?.toInt() ?: 0,
-                                count_rate = (data["count_rate"] as? Long)?.toInt() ?: 0,
-                                categoryIds = (data["categoryIds"] as? List<*>)?.filterNotNull() ?: emptyList(),
-                                publicationDate = data["publicationDate"] as? String ?: "",
-                                lastChapterId = data["lastChapterId"] as? String,
-                                lastChapterNumber = (data["lastChapterNumber"] as? Long)?.toInt(),
-                                lastReadTime = data["lastReadTime"] as? Long,
-                                scrollIndex = (data["scrollIndex"] as? Long)?.toInt() ?: 0
-                            )
-                        } else null
-                    }
+                    Story.fromSnapshot(doc)
                 }
                 _stories.value = list
             } catch (e: Exception) {

@@ -41,14 +41,14 @@ class AuthorAdminViewModel : ViewModel() {
                 // Tạo tên file duy nhất
                 val fileName = "author_${UUID.randomUUID()}.jpg"
                 val file = File(context.filesDir, fileName)
-                
+
                 // Copy dữ liệu từ Uri vào file cục bộ
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(file).use { output ->
                         input.copyTo(output)
                     }
                 }
-                
+
                 onSuccess(file.absolutePath)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -165,7 +165,7 @@ class AuthorAdminViewModel : ViewModel() {
 
             for (i in 1..sheet.lastRowNum) {
                 val row = sheet.getRow(i) ?: continue
-                
+
                 val name = getCellValue(row, 1)
                 if (name.isEmpty()) continue // Bỏ qua dòng trống
 

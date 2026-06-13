@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -93,6 +94,16 @@ fun CategoryAdminScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                FilterButton("Filter", Icons.Default.FilterList)
+                FilterButton("Sort", Icons.AutoMirrored.Filled.Sort)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -165,7 +176,7 @@ fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
                 StatusBadge(category.status)
             }
             Text(category.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            
+
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = onDelete) {
                     Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = AlertText, modifier = Modifier.size(20.dp))
@@ -246,12 +257,12 @@ fun CategoryEditDialog(
 
             LabelText("STATUS")
             var expanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Box(modifier = Modifier.fillMaxWidth().clickable { expanded = true }) {
                 OutlinedTextField(
                     value = status,
                     onValueChange = {},
                     readOnly = true,
-                    modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                    modifier = Modifier.fillMaxWidth(),
                     trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null) },
                     enabled = false,
                     colors = OutlinedTextFieldDefaults.colors(
