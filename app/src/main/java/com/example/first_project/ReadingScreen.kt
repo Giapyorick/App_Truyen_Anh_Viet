@@ -62,7 +62,7 @@ fun ReadingScreen(
 
     val db = remember { FirebaseFirestore.getInstance() }
     val context = LocalContext.current
-    
+
     var storyData by remember { mutableStateOf<Story?>(null) }
     var chapters by remember { mutableStateOf<List<Chapter>>(emptyList()) }
     var currentChapter by remember { mutableStateOf<Chapter?>(null) }

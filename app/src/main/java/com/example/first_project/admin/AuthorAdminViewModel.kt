@@ -2,15 +2,12 @@ package com.example.first_project.admin
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.first_project.Author
+import com.example.first_project.Activity
 import com.google.firebase.Firebase
 import com.google.firebase.firestore.firestore
-import com.google.firebase.storage.storage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -22,7 +19,6 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
-
 import java.io.File
 import java.io.FileOutputStream
 
@@ -35,24 +31,21 @@ class AuthorAdminViewModel : ViewModel() {
         fetchAuthors()
     }
 
-    fun saveImageLocally(context: Context, uri: Uri, onSuccess: (String) -> Unit, onError: (Exception) -> Unit) {
+    private fun logActivity(action: String, target: String, isSuccess: Boolean = true) {
         viewModelScope.launch {
             try {
-                // Tạo tên file duy nhất
-                val fileName = "author_${UUID.randomUUID()}.jpg"
-                val file = File(context.filesDir, fileName)
-                
-                // Copy dữ liệu từ Uri vào file cục bộ
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    FileOutputStream(file).use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                
-                onSuccess(file.absolutePath)
+                val ref = db.collection("activities").document()
+                val activity = Activity(
+                    id = ref.id,
+                    action = action,
+                    target = target,
+                    timestamp = System.currentTimeMillis(),
+                    status = if (isSuccess) "SUCCESS" else "ALERT",
+                    isSuccess = isSuccess
+                )
+                ref.set(activity).await()
             } catch (e: Exception) {
                 e.printStackTrace()
-                onError(e)
             }
         }
     }
@@ -71,15 +64,35 @@ class AuthorAdminViewModel : ViewModel() {
         }
     }
 
+    fun saveImageLocally(context: Context, uri: Uri, onSuccess: (String) -> Unit, onError: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                val fileName = "author_${UUID.randomUUID()}.jpg"
+                val file = File(context.filesDir, fileName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(file).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                onSuccess(file.absolutePath)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onError()
+            }
+        }
+    }
+
     fun addAuthor(author: Author, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             try {
                 val ref = db.collection("authors").document()
                 val newAuthor = author.copy(id = ref.id)
                 ref.set(newAuthor).await()
+                logActivity("Thêm tác giả", newAuthor.authorName)
                 fetchAuthors()
                 onResult(true)
             } catch (e: Exception) {
+                logActivity("Thêm tác giả thất bại", author.authorName, false)
                 onResult(false)
             }
         }
@@ -89,9 +102,11 @@ class AuthorAdminViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 db.collection("authors").document(author.id).set(author).await()
+                logActivity("Cập nhật tác giả", author.authorName)
                 fetchAuthors()
                 onResult(true)
             } catch (e: Exception) {
+                logActivity("Cập nhật tác giả thất bại", author.authorName, false)
                 onResult(false)
             }
         }
@@ -99,11 +114,14 @@ class AuthorAdminViewModel : ViewModel() {
 
     fun deleteAuthor(authorId: String, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
+            val authorName = _authors.value.find { it.id == authorId }?.authorName ?: "Unknown"
             try {
                 db.collection("authors").document(authorId).delete().await()
+                logActivity("Xóa tác giả", authorName)
                 fetchAuthors()
                 onResult(true)
             } catch (e: Exception) {
+                logActivity("Xóa tác giả thất bại", authorName, false)
                 onResult(false)
             }
         }
@@ -150,6 +168,7 @@ class AuthorAdminViewModel : ViewModel() {
 
             workbook.write(outputStream)
             workbook.close()
+            logActivity("Xuất file Excel", "Danh sách tác giả")
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -165,11 +184,9 @@ class AuthorAdminViewModel : ViewModel() {
 
             for (i in 1..sheet.lastRowNum) {
                 val row = sheet.getRow(i) ?: continue
-                
                 val name = getCellValue(row, 1)
-                if (name.isEmpty()) continue // Bỏ qua dòng trống
+                if (name.isEmpty()) continue
 
-                // Đọc ID, nếu là "null" hoặc trống thì coi như không có ID
                 val rawId = getCellValue(row, 0)
                 val authorId = if (rawId.isEmpty() || rawId.lowercase() == "null") "" else rawId
 
@@ -194,6 +211,7 @@ class AuthorAdminViewModel : ViewModel() {
                     batch.set(ref, finalAuthor)
                 }
                 batch.commit().await()
+                logActivity("Nhập file Excel", "${newAuthors.size} tác giả")
                 fetchAuthors()
             }
             true

@@ -1,6 +1,7 @@
 package com.example.first_project.admin
 
 import androidx.activity.compose.BackHandler
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -37,50 +38,79 @@ import com.example.first_project.Story
 import com.example.first_project.AdminBg
 import com.example.first_project.DarkGreen
 import com.example.first_project.AlertText
-import com.example.first_project.SuccessGreen
-import com.example.first_project.SuccessText
-import com.example.first_project.AlertRed
-import com.example.first_project.InfoBlue
-import com.example.first_project.InfoText
 import com.example.first_project.LabelText
 import com.example.first_project.TransparentTextField
 import com.example.first_project.StatusBadge
-import java.util.Calendar
+import com.example.first_project.ConfirmationDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryAdminScreen(
     onBack: () -> Unit,
+    onManageChapters: (String) -> Unit,
     viewModel: StoryAdminViewModel = viewModel()
 ) {
     val stories by viewModel.stories.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
     var showDialog by remember { mutableStateOf(false) }
-
-
-
-
     var selectedStory by remember { mutableStateOf<Story?>(null) }
-
-
-
-
     var searchQuery by remember { mutableStateOf("") }
-
-
-
-
+    
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var storyToDelete by remember { mutableStateOf<Story?>(null) }
 
     val filteredStories = stories.filter {
         it.title.contains(searchQuery, ignoreCase = true) ||
         it.description.contains(searchQuery, ignoreCase = true)
     }
 
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        onResult = { uri ->
+            uri?.let {
+                scope.launch {
+                    val success = withContext(Dispatchers.IO) {
+                        try {
+                            context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                                viewModel.exportToExcel(outputStream)
+                            } ?: false
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+                    if (success) Toast.makeText(context, "Đã xuất file thành công!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
 
-
-
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri ->
+            uri?.let {
+                scope.launch {
+                    val success = withContext(Dispatchers.IO) {
+                        try {
+                            context.contentResolver.openInputStream(it)?.use { inputStream ->
+                                viewModel.importFromExcel(inputStream)
+                            } ?: false
+                        } catch (e: Exception) {
+                            false
+                        }
+                    }
+                    if (success) Toast.makeText(context, "Đã nạp dữ liệu thành công!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    )
 
     Scaffold(
         containerColor = AdminBg,
@@ -90,21 +120,21 @@ fun StoryAdminScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("Quản lý Truyện", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
-
-
-
-
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-
-
-
-
+                },
+                actions = {
+                    IconButton(onClick = { exportLauncher.launch("stories.xlsx") }) {
+                        Icon(Icons.Default.Download, contentDescription = "Export")
+                    }
+                    IconButton(onClick = { importLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") }) {
+                        Icon(Icons.Default.Upload, contentDescription = "Import")
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
             )
@@ -121,15 +151,7 @@ fun StoryAdminScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add")
             }
-
-
-
-
         }
-
-
-
-
     ) { padding ->
         Column(
             modifier = Modifier
@@ -138,13 +160,13 @@ fun StoryAdminScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Text(
-                "MANAGEMENT",
+                "HỆ THỐNG QUẢN TRỊ",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                "Stories Directory",
+                "Danh mục Truyện",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Serif
@@ -156,7 +178,7 @@ fun StoryAdminScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                placeholder = { Text("Search stories...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
+                placeholder = { Text("Tìm kiếm truyện...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -183,44 +205,18 @@ fun StoryAdminScreen(
                             showDialog = true
                         },
                         onDelete = {
-                            viewModel.deleteStory(story.id) { }
-
-
-
-
-                        }
-
-
-
-
+                            storyToDelete = story
+                            showDeleteConfirm = true
+                        },
+                        onManageChapters = { onManageChapters(story.id) }
                     )
                 }
-
-
-
-
             }
-
-
-
-
         }
-
-
-
-
     }
-
-
-
-
 
     if (showDialog) {
         BackHandler { showDialog = false }
-
-
-
-
         StoryEditDialog(
             story = selectedStory,
             viewModel = viewModel,
@@ -228,45 +224,33 @@ fun StoryAdminScreen(
             onConfirm = { story ->
                 if (selectedStory == null) {
                     viewModel.addStory(story) { showDialog = false }
-
-
-
-
                 } else {
                     viewModel.updateStory(story) { showDialog = false }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
         )
     }
 
-
-
-
+    if (showDeleteConfirm && storyToDelete != null) {
+        ConfirmationDialog(
+            title = "Xóa truyện",
+            message = "Bạn có chắc chắn muốn xóa truyện \"${storyToDelete?.title}\"? Tất cả các chương của truyện này cũng sẽ bị xóa.",
+            onConfirm = {
+                viewModel.deleteStory(storyToDelete!!.id) {
+                    showDeleteConfirm = false
+                    storyToDelete = null
+                }
+            },
+            onDismiss = {
+                showDeleteConfirm = false
+                storyToDelete = null
+            }
+        )
+    }
 }
 
-
-
-
-
-
-
-
-
-
 @Composable
-fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit, onManageChapters: () -> Unit) {
     val imagePath = if (story.img.startsWith("assets/")) {
         "file:///android_asset/${story.img.removePrefix("assets/")}"
     } else if (story.img.startsWith("/")) {
@@ -275,15 +259,11 @@ fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
         story.img
     }
 
-
-
-
-
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onEdit() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.5.dp)
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             AsyncImage(
@@ -306,47 +286,23 @@ fun StoryItem(story: Story, onEdit: () -> Unit, onDelete: () -> Unit) {
                     StatusBadge(story.status)
                 }
 
-
-
-
                 Text(story.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 2)
                 
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onManageChapters) {
+                        Text("Quản lý Chương", style = MaterialTheme.typography.bodySmall, color = DarkGreen)
+                    }
                     IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.DeleteOutline, contentDescription = "Delete", tint = AlertText, modifier = Modifier.size(18.dp))
                     }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
         }
-
-
-
-
     }
-
-
-
-
 }
 
-
-
-
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StoryEditDialog(
     story: Story?,
@@ -355,75 +311,27 @@ fun StoryEditDialog(
     onConfirm: (Story) -> Unit
 ) {
     var title by remember { mutableStateOf(story?.title ?: "") }
-
-
-
-
     var description by remember { mutableStateOf(story?.description ?: "") }
-
-
-
-
     var publicationDate by remember { mutableStateOf(story?.publicationDate ?: "") }
-
-
-
-
     var status by remember { mutableStateOf(story?.status ?: "In-progress") }
-
-
-
-
     var authorId by remember { mutableStateOf(story?.authorId ?: "") }
-
-
-
-
     var imgUrl by remember { mutableStateOf(story?.img ?: "") }
-
-
-
-
     var selectedCategoryIds by remember { mutableStateOf(story?.categoryIds?.map { it.toString() } ?: emptyList<String>()) }
-
-
-
-
     
     var showDatePicker by remember { mutableStateOf(false) }
-
-
-
-
     val datePickerState = rememberDatePickerState()
-
     val dateFormatter = remember { SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()) }
-
-
-
-
     
     val categories by viewModel.categories.collectAsState()
     val authors by viewModel.authors.collectAsState()
     
     var selectedImageUri by remember { mutableStateOf<android.net.Uri?>(null) }
-
-
-
-
     var isUploading by remember { mutableStateOf(false) }
-
-
-
 
     val context = LocalContext.current
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri -> selectedImageUri = uri }
-
-
-
-
 
     val onSave = {
         if (selectedImageUri != null) {
@@ -469,28 +377,15 @@ fun StoryEditDialog(
             ))
             onConfirm(updated)
         }
-
-
-
-
     }
-
-
-
-
 
     Scaffold(
         containerColor = AdminBg,
         topBar = {
             TopAppBar(
-                title = { Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                title = { Text("Chi tiết Truyện", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                 navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
                 actions = {
-                    TextButton(onClick = {}) { Text("Draft", color = Color.Gray) }
-
-
-
-
                     Button(
                         onClick = onSave,
                         colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
@@ -498,20 +393,12 @@ fun StoryEditDialog(
                         enabled = !isUploading
                     ) {
                         if (isUploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                        else Text("Save Story", color = Color.White)
+                        else Text("Lưu thay đổi", color = Color.White)
                     }
-
-
-
-
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
             )
         }
-
-
-
-
     ) { padding ->
         Column(
             modifier = Modifier
@@ -522,24 +409,17 @@ fun StoryEditDialog(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                if (story == null) "Create Story Details" else "Edit Story Details",
+                if (story == null) "Tạo Truyện mới" else "Chỉnh sửa Truyện",
                 style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)
             )
-            Text(
-                "Configure the metadata and literary taxonomy for this bilingual entry.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LabelText("TITLE")
-            TransparentTextField(value = title, onValueChange = { title = it }, placeholder = "Enter story title in English or Vietnamese...")
+            LabelText("TIÊU ĐỀ")
+            TransparentTextField(value = title, onValueChange = { title = it }, placeholder = "Nhập tiêu đề truyện...")
 
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 40.dp)
+                    .padding(horizontal = 80.dp)
                     .aspectRatio(2 / 3f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color.White)
@@ -547,49 +427,24 @@ fun StoryEditDialog(
                     .clickable { imagePickerLauncher.launch("image/*") },
                 contentAlignment = Alignment.Center
             ) {
-                val displayImg = if (imgUrl.startsWith("assets/")) {
-                    "file:///android_asset/${imgUrl.removePrefix("assets/")}"
-                } else if (imgUrl.startsWith("/")) {
-                    java.io.File(imgUrl)
-                } else {
-                    imgUrl
-                }
-
-
-
-
-
                 if (selectedImageUri != null) {
                     AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else if (imgUrl.isNotEmpty()) {
-                    AsyncImage(model = displayImg, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    AsyncImage(model = if (imgUrl.startsWith("/")) java.io.File(imgUrl) else imgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(48.dp), tint = Color.LightGray)
-                        Text("Add Story Cover", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Thêm ảnh bìa", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
-
-
-
-
                 }
-
-
-
-
             }
 
-
-
-
-
-            LabelText("DESCRIPTION")
+            LabelText("MÔ TẢ")
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Provide a brief synopsis of the work...", color = Color.LightGray) },
-                minLines = 4,
+                minLines = 3,
                 colors = OutlinedTextFieldDefaults.colors(
                     unfocusedContainerColor = Color.White,
                     focusedContainerColor = Color.White,
@@ -598,42 +453,50 @@ fun StoryEditDialog(
                 )
             )
 
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(18.dp), tint = DarkGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        LabelText("Publication Date")
-                    }
-
-
-
-
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    LabelText("NGÀY XUẤT BẢN")
                     Box(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
-                        TransparentTextField(
+                        OutlinedTextField(
                             value = publicationDate,
                             onValueChange = { },
-                            placeholder = "yyyy/mm/dd",
-                            enabled = false
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            trailingIcon = { Icon(Icons.Default.CalendarToday, null, modifier = Modifier.size(18.dp)) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = Color.Black,
+                                disabledContainerColor = Color(0xFFF1F1F1),
+                                disabledBorderColor = Color.Transparent
+                            )
                         )
                     }
-
-
-
-
                 }
-
-
-
-
+                
+                Column(modifier = Modifier.weight(1f)) {
+                    LabelText("TRẠNG THÁI")
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        OutlinedTextField(
+                            value = status,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { expanded = true },
+                            trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null) },
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = Color.Black,
+                                disabledContainerColor = Color(0xFFF1F1F1),
+                                disabledBorderColor = Color.Transparent
+                            )
+                        )
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            listOf("In-progress", "Completed", "Hiatus").forEach { s ->
+                                DropdownMenuItem(text = { Text(s) }, onClick = { status = s; expanded = false })
+                            }
+                        }
+                    }
+                }
             }
-
-
-
-
 
             if (showDatePicker) {
                 DatePickerDialog(
@@ -643,342 +506,58 @@ fun StoryEditDialog(
                             datePickerState.selectedDateMillis?.let {
                                 publicationDate = dateFormatter.format(Date(it))
                             }
-
-
-
-
                             showDatePicker = false
                         }) { Text("OK") }
-
-
-
-
                     },
-                    dismissButton = {
-                        TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-
-
-
-
-                    }
-
-
-
-
-                ) {
-                    DatePicker(state = datePickerState)
-                }
-
-
-
-
+                    dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Hủy") } }
+                ) { DatePicker(state = datePickerState) }
             }
 
-
-
-
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.AutoMirrored.Filled.LibraryBooks, null, modifier = Modifier.size(18.dp), tint = DarkGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        LabelText("Status")
+            LabelText("TÁC GIẢ")
+            var authorExpanded by remember { mutableStateOf(false) }
+            val currentAuthor = authors.find { it.id == authorId }
+            Box(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = currentAuthor?.authorName ?: "Chọn Tác giả",
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.fillMaxWidth().clickable { authorExpanded = true },
+                    enabled = false,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = if (currentAuthor != null) Color.Black else Color.Gray,
+                        disabledContainerColor = Color(0xFFF1F1F1),
+                        disabledBorderColor = Color.Transparent
+                    )
+                )
+                DropdownMenu(expanded = authorExpanded, onDismissRequest = { authorExpanded = false }) {
+                    authors.forEach { author ->
+                        DropdownMenuItem(text = { Text(author.authorName) }, onClick = { authorId = author.id; authorExpanded = false })
                     }
-
-
-
-
-                    var expanded by remember { mutableStateOf(false) }
-
-
-
-
-                    Box(modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(vertical = 8.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(status)
-                            Icon(Icons.Default.KeyboardArrowDown, null)
-                        }
-
-
-
-
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            listOf("In-progress", "Completed", "Hiatus", "Draft").forEach { s ->
-                                DropdownMenuItem(text = { Text(s) }, onClick = { status = s; expanded = false })
-                            }
-
-
-
-
-                        }
-
-
-
-
-                    }
-
-
-
-
                 }
-
-
-
-
             }
 
-
-
-
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Category, null, modifier = Modifier.size(18.dp), tint = DarkGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        LabelText("Category selection")
-                    }
-
-
-
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val chunks = categories.chunked(2) // Display 2 categories per row for stability
-                        chunks.forEach { rowItems ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                rowItems.forEach { cat ->
-                                    val catId = cat.id
-                                    val isSelected = selectedCategoryIds.map { it.toString() }.contains(catId.toString())
-                                    FilterChip(
-                                        modifier = Modifier.weight(1f),
-                                        selected = isSelected,
-                                        onClick = {
-                                            val currentList = selectedCategoryIds.map { it.toString() }
-
-
-
-
-                                            selectedCategoryIds = if (isSelected) {
-                                                currentList.filter { it != catId.toString() }
-
-
-
-
-                                            } else {
-                                                currentList + catId.toString()
-                                            }
-
-
-
-
-                                        },
-                                        label = { 
-                                            Text(
-                                                cat.name, 
-                                                fontSize = 12.sp,
-                                                maxLines = 1,
-                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                            ) 
-                                        },
-                                        colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = DarkGreen,
-                                            selectedLabelColor = Color.White
-                                        )
-                                    )
-                                }
-
-
-
-
-                                if (rowItems.size < 2) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
-
-
-
-
-                            }
-
-
-
-
-                        }
-
-
-
-
-                    }
-
-
-
-
-                }
-
-
-
-
-            }
-
-
-
-
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1)),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, null, modifier = Modifier.size(18.dp), tint = DarkGreen)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        LabelText("Author assignment")
-                    }
-
-
-
-
-                    
-                    var expanded by remember { mutableStateOf(false) }
-
-
-
-
-                    val currentAuthor = authors.find { it.id == authorId }
-
-
-
-
-                    
-                    Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                            color = Color.White,
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
-                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (currentAuthor != null) {
-                                    AsyncImage(
-                                        model = if (currentAuthor.img.startsWith("/")) java.io.File(currentAuthor.img) else currentAuthor.img,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(currentAuthor.authorName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                        Text(currentAuthor.country, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            LabelText("THỂ LOẠI")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                categories.chunked(3).forEach { row ->
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        row.forEach { cat ->
+                            FilterChip(
+                                selected = selectedCategoryIds.contains(cat.id),
+                                onClick = {
+                                    selectedCategoryIds = if (selectedCategoryIds.contains(cat.id)) {
+                                        selectedCategoryIds - cat.id
+                                    } else {
+                                        selectedCategoryIds + cat.id
                                     }
-
-
-
-
-                                } else {
-                                    Text("Select Author", modifier = Modifier.weight(1f), color = Color.Gray)
-                                }
-
-
-
-
-                                Icon(Icons.Default.SwapHoriz, null, tint = Color.Gray)
-                            }
-
-
-
-
+                                },
+                                label = { Text(cat.name, fontSize = 11.sp) }
+                            )
                         }
-
-
-
-
-                        
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            authors.forEach { author ->
-                                DropdownMenuItem(
-                                    text = { Text(author.authorName) },
-                                    onClick = {
-                                        authorId = author.id
-                                        expanded = false
-                                    }
-
-
-
-
-                                )
-                            }
-
-
-
-
-                        }
-
-
-
-
                     }
-
-
-
-
                 }
-
-
-
-
             }
-
-
-
-
-
+            
             Spacer(modifier = Modifier.height(32.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Delete Draft", color = Color.Gray, modifier = Modifier.clickable { onDismiss() })
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.height(48.dp).fillMaxWidth(0.6f),
-                    enabled = !isUploading
-                ) {
-                    if (isUploading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    else Text("Confirm Changes")
-                }
-
-
-
-
-            }
-
-
-
-
-            Spacer(modifier = Modifier.height(40.dp))
         }
-
-
-
-
     }
-
-
-
-
 }
-
-
-
-

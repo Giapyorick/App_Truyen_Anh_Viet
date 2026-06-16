@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.first_project.*
 import kotlinx.coroutines.Dispatchers
@@ -32,24 +35,29 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryAdminScreen(
+fun ChapterAdminScreen(
+    storyId: String,
     onBack: () -> Unit,
-    viewModel: CategoryAdminViewModel = viewModel()
+    viewModel: ChapterAdminViewModel = viewModel()
 ) {
-    val categories by viewModel.categories.collectAsState()
+    val chapters by viewModel.chapters.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     
-    var showDialog by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf<Category?>(null) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var selectedChapter by remember { mutableStateOf<Chapter?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var categoryToDelete by remember { mutableStateOf<Category?>(null) }
+    var chapterToDelete by remember { mutableStateOf<Chapter?>(null) }
 
-    val filteredCategories = categories.filter {
-        it.name.contains(searchQuery, ignoreCase = true) ||
-        it.description.contains(searchQuery, ignoreCase = true)
+    LaunchedEffect(storyId) {
+        viewModel.fetchChapters(storyId)
+    }
+
+    val filteredChapters = chapters.filter {
+        it.title.contains(searchQuery, ignoreCase = true) ||
+        it.chapterNumber.toString().contains(searchQuery)
     }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -80,7 +88,7 @@ fun CategoryAdminScreen(
                     val success = withContext(Dispatchers.IO) {
                         try {
                             context.contentResolver.openInputStream(it)?.use { inputStream ->
-                                viewModel.importFromExcel(inputStream)
+                                viewModel.importFromExcel(storyId, inputStream)
                             } ?: false
                         } catch (e: Exception) {
                             false
@@ -100,7 +108,7 @@ fun CategoryAdminScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Quản lý Thể loại", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("Quản lý Chương", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 navigationIcon = {
@@ -109,7 +117,7 @@ fun CategoryAdminScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { exportLauncher.launch("categories.xlsx") }) {
+                    IconButton(onClick = { exportLauncher.launch("chapters_${storyId}.xlsx") }) {
                         Icon(Icons.Default.Download, contentDescription = "Export")
                     }
                     IconButton(onClick = { importLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") }) {
@@ -122,8 +130,8 @@ fun CategoryAdminScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    selectedCategory = null
-                    showDialog = true
+                    selectedChapter = null
+                    showEditDialog = true
                 },
                 containerColor = DarkGreen,
                 contentColor = Color.White,
@@ -140,13 +148,13 @@ fun CategoryAdminScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Text(
-                "HỆ THỐNG QUẢN TRỊ",
+                "MÃ TRUYỆN: $storyId",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                "Danh mục Thể loại",
+                "Danh sách Chương",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Serif
@@ -158,7 +166,7 @@ fun CategoryAdminScreen(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                placeholder = { Text("Tìm kiếm thể loại...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
+                placeholder = { Text("Tìm kiếm chương...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -177,15 +185,15 @@ fun CategoryAdminScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 contentPadding = PaddingValues(bottom = 100.dp)
             ) {
-                items(filteredCategories) { category ->
-                    CategoryItem(
-                        category = category,
+                items(filteredChapters) { chapter ->
+                    ChapterItemAdmin(
+                        chapter = chapter,
                         onEdit = {
-                            selectedCategory = category
-                            showDialog = true
+                            selectedChapter = chapter
+                            showEditDialog = true
                         },
                         onDelete = {
-                            categoryToDelete = category
+                            chapterToDelete = chapter
                             showDeleteConfirm = true
                         }
                     )
@@ -194,41 +202,41 @@ fun CategoryAdminScreen(
         }
     }
 
-    if (showDialog) {
-        BackHandler { showDialog = false }
-        CategoryEditDialog(
-            category = selectedCategory,
-            onDismiss = { showDialog = false },
-            onConfirm = { cat ->
-                if (selectedCategory == null) {
-                    viewModel.addCategory(cat) { showDialog = false }
+    if (showEditDialog) {
+        BackHandler { showEditDialog = false }
+        ChapterEditDialog(
+            chapter = selectedChapter,
+            onDismiss = { showEditDialog = false },
+            onConfirm = { updatedChapter ->
+                if (selectedChapter == null) {
+                    viewModel.addChapter(storyId, updatedChapter) { showEditDialog = false }
                 } else {
-                    viewModel.updateCategory(cat) { showDialog = false }
+                    viewModel.updateChapter(storyId, updatedChapter) { showEditDialog = false }
                 }
             }
         )
     }
 
-    if (showDeleteConfirm && categoryToDelete != null) {
+    if (showDeleteConfirm && chapterToDelete != null) {
         ConfirmationDialog(
-            title = "Xóa thể loại",
-            message = "Bạn có chắc chắn muốn xóa thể loại \"${categoryToDelete?.name}\"? Thao tác này có thể ảnh hưởng đến các truyện thuộc thể loại này.",
+            title = "Xóa chương",
+            message = "Bạn có chắc chắn muốn xóa Chương ${chapterToDelete?.chapterNumber}: ${chapterToDelete?.title}? Thao tác này không thể hoàn tác.",
             onConfirm = {
-                viewModel.deleteCategory(categoryToDelete!!.id) {
+                viewModel.deleteChapter(storyId, chapterToDelete!!.id) {
                     showDeleteConfirm = false
-                    categoryToDelete = null
+                    chapterToDelete = null
                 }
             },
             onDismiss = {
                 showDeleteConfirm = false
-                categoryToDelete = null
+                chapterToDelete = null
             }
         )
     }
 }
 
 @Composable
-fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
+fun ChapterItemAdmin(chapter: Chapter, onEdit: () -> Unit, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable { onEdit() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -238,12 +246,12 @@ fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(
-                    category.name,
+                    "Chương ${chapter.chapterNumber}: ${chapter.title}",
                     style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium)
                 )
-                StatusBadge(category.status)
+                Text(chapter.createdDate, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
             }
-            Text(category.description, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text("${chapter.paragraphs.size} đoạn văn", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 IconButton(onClick = onDelete) {
@@ -256,31 +264,38 @@ fun CategoryItem(category: Category, onEdit: () -> Unit, onDelete: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CategoryEditDialog(
-    category: Category?,
+fun ChapterEditDialog(
+    chapter: Chapter?,
     onDismiss: () -> Unit,
-    onConfirm: (Category) -> Unit
+    onConfirm: (Chapter) -> Unit
 ) {
-    var name by remember { mutableStateOf(category?.name ?: "") }
-    var description by remember { mutableStateOf(category?.description ?: "") }
-    var status by remember { mutableStateOf(category?.status ?: "Active") }
+    var number by remember { mutableStateOf(chapter?.chapterNumber?.toString() ?: "") }
+    var title by remember { mutableStateOf(chapter?.title ?: "") }
+    var paragraphs by remember { mutableStateOf(chapter?.paragraphs ?: emptyList<Paragraph>()) }
 
     Scaffold(
         containerColor = AdminBg,
         topBar = {
             TopAppBar(
-                title = { Text("Chi tiết Thể loại", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                title = { Text("Chi tiết Chương", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                 navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
                 actions = {
                     Button(
                         onClick = {
-                            onConfirm(category?.copy(name = name, description = description, status = status)
-                                ?: Category(name = name, description = description, status = status))
+                            onConfirm(chapter?.copy(
+                                chapterNumber = number.toIntOrNull() ?: 0,
+                                title = title,
+                                paragraphs = paragraphs
+                            ) ?: Chapter(
+                                chapterNumber = number.toIntOrNull() ?: 0,
+                                title = title,
+                                paragraphs = paragraphs
+                            ))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
                         shape = RoundedCornerShape(4.dp)
                     ) {
-                        Text("Lưu", color = Color.White)
+                        Text("Lưu chương", color = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
@@ -296,52 +311,89 @@ fun CategoryEditDialog(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                if (category == null) "Tạo Thể loại mới" else "Chỉnh sửa Thể loại",
+                if (chapter == null) "Tạo Chương mới" else "Chỉnh sửa Chương",
                 style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)
             )
 
-            LabelText("TÊN THỂ LOẠI")
-            TransparentTextField(value = name, onValueChange = { name = it }, placeholder = "Nhập tên thể loại...")
-
-            LabelText("MÔ TẢ")
-            OutlinedTextField(
-                value = description,
-                onValueChange = { description = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Nhập mô tả cho thể loại này...", color = Color.LightGray) },
-                minLines = 3,
-                colors = OutlinedTextFieldDefaults.colors(
-                    unfocusedContainerColor = Color.White,
-                    focusedContainerColor = Color.White,
-                    unfocusedBorderColor = Color.LightGray,
-                    focusedBorderColor = DarkGreen
-                )
-            )
-
-            LabelText("TRẠNG THÁI")
-            var expanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = status,
-                    onValueChange = {},
-                    readOnly = true,
-                    modifier = Modifier.fillMaxWidth().clickable { expanded = true },
-                    trailingIcon = { Icon(Icons.Default.KeyboardArrowDown, null) },
-                    enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = Color.Black,
-                        disabledTrailingIconColor = Color.Gray,
-                        disabledContainerColor = Color(0xFFF1F1F1),
-                        disabledBorderColor = Color.Transparent
-                    )
-                )
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    listOf("Active", "Inactive").forEach { s ->
-                        DropdownMenuItem(text = { Text(s) }, onClick = { status = s; expanded = false })
-                    }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(modifier = Modifier.weight(0.3f)) {
+                    LabelText("SỐ CHƯƠNG")
+                    TransparentTextField(value = number, onValueChange = { number = it }, placeholder = "VD: 1")
+                }
+                Column(modifier = Modifier.weight(0.7f)) {
+                    LabelText("TIÊU ĐỀ")
+                    TransparentTextField(value = title, onValueChange = { title = it }, placeholder = "Nhập tiêu đề chương...")
                 }
             }
+
+            LabelText("NỘI DUNG ĐOẠN VĂN")
+            
+            paragraphs.forEachIndexed { index, p ->
+                ParagraphEditItem(
+                    paragraph = p,
+                    onUpdate = { updatedP ->
+                        val newList = paragraphs.toMutableList()
+                        newList[index] = updatedP
+                        paragraphs = newList
+                    },
+                    onDelete = {
+                        paragraphs = paragraphs.filterIndexed { i, _ -> i != index }
+                    }
+                )
+            }
+
+            Button(
+                onClick = {
+                    paragraphs = paragraphs + Paragraph(paragraphOrder = paragraphs.size + 1)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.Add, null, tint = Color.Black)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Thêm đoạn văn", color = Color.Black)
+            }
+            
             Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun ParagraphEditItem(paragraph: Paragraph, onUpdate: (Paragraph) -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.LightGray)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Thứ tự: ${paragraph.paragraphOrder}", style = MaterialTheme.typography.labelSmall)
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                }
+            }
+            
+            OutlinedTextField(
+                value = paragraph.english,
+                onValueChange = { onUpdate(paragraph.copy(english = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Tiếng Anh (English)", fontSize = 12.sp) },
+                minLines = 2,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = DarkGreen)
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            OutlinedTextField(
+                value = paragraph.vietnamese,
+                onValueChange = { onUpdate(paragraph.copy(vietnamese = it)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Tiếng Việt", fontSize = 12.sp) },
+                minLines = 2,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = DarkGreen)
+            )
         }
     }
 }

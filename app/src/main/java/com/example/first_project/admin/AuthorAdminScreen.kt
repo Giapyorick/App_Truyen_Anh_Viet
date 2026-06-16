@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,15 +39,11 @@ import coil.compose.AsyncImage
 import com.example.first_project.Author
 import com.example.first_project.AdminBg
 import com.example.first_project.DarkGreen
-import com.example.first_project.SuccessGreen
-import com.example.first_project.SuccessText
-import com.example.first_project.AlertRed
 import com.example.first_project.AlertText
-import com.example.first_project.InfoBlue
-import com.example.first_project.InfoText
 import com.example.first_project.LabelText
 import com.example.first_project.TransparentTextField
 import com.example.first_project.StatusBadge
+import com.example.first_project.ConfirmationDialog
 import java.util.Calendar
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,9 +51,6 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-// Colors from AdminDashboard
-// Using colors from AdminScreen.kt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,9 +61,13 @@ fun AuthorAdminScreen(
     val authors by viewModel.authors.collectAsState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    
     var showDialog by remember { mutableStateOf(false) }
     var selectedAuthor by remember { mutableStateOf<Author?>(null) }
     var searchQuery by remember { mutableStateOf("") }
+    
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var authorToDelete by remember { mutableStateOf<Author?>(null) }
 
     val filteredAuthors = authors.filter {
         it.authorName.contains(searchQuery, ignoreCase = true) ||
@@ -93,7 +89,7 @@ fun AuthorAdminScreen(
                             false
                         }
                     }
-                    if (success) Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+                    if (success) Toast.makeText(context, "Đã xuất file thành công!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -113,7 +109,7 @@ fun AuthorAdminScreen(
                             false
                         }
                     }
-                    if (success) Toast.makeText(context, "Imported successfully!", Toast.LENGTH_SHORT).show()
+                    if (success) Toast.makeText(context, "Đã nạp dữ liệu thành công!", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -127,7 +123,7 @@ fun AuthorAdminScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("Quản lý Tác giả", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
                 },
                 navigationIcon = {
@@ -142,7 +138,6 @@ fun AuthorAdminScreen(
                     IconButton(onClick = { importLauncher.launch("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") }) {
                         Icon(Icons.Default.Upload, contentDescription = "Import")
                     }
-                    IconButton(onClick = {}) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
             )
@@ -159,15 +154,6 @@ fun AuthorAdminScreen(
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add")
             }
-        },
-        bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(icon = { Icon(Icons.Default.Explore, null) }, label = { Text("Explore") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null) }, label = { Text("Library") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.Translate, null) }, label = { Text("Words") }, selected = false, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.AccountCircle, null) }, label = { Text("Account") }, selected = true, onClick = {})
-                NavigationBarItem(icon = { Icon(Icons.Default.Stars, null) }, label = { Text("Premium") }, selected = false, onClick = {})
-            }
         }
     ) { padding ->
         Column(
@@ -177,13 +163,13 @@ fun AuthorAdminScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Text(
-                "MANAGEMENT",
+                "HỆ THỐNG QUẢN TRỊ",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.Gray,
                 modifier = Modifier.padding(top = 16.dp)
             )
             Text(
-                "Authors Directory",
+                "Danh mục Tác giả",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = FontFamily.Serif
@@ -191,21 +177,11 @@ fun AuthorAdminScreen(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                FilterButton("Filter", Icons.Default.FilterList)
-                FilterButton("Sort", Icons.AutoMirrored.Filled.Sort)
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
-                placeholder = { Text("Search by name, email, or country...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
+                placeholder = { Text("Tìm theo tên, email, quốc gia...", style = MaterialTheme.typography.bodyMedium, color = Color.Gray) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
                 shape = RoundedCornerShape(8.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -232,7 +208,8 @@ fun AuthorAdminScreen(
                             showDialog = true
                         },
                         onDelete = {
-                            viewModel.deleteAuthor(author.id) { }
+                            authorToDelete = author
+                            showDeleteConfirm = true
                         }
                     )
                 }
@@ -255,33 +232,22 @@ fun AuthorAdminScreen(
             }
         )
     }
-}
 
-@Preview(showBackground = true)
-@Composable
-fun AuthorAdminScreenPreview() {
-    MaterialTheme {
-        AuthorAdminScreen(onBack = {})
-    }
-}
-
-@Composable
-fun FilterButton(text: String, icon: ImageVector) {
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(1.dp, Color.LightGray),
-        color = Color.White,
-        modifier = Modifier.height(36.dp).clickable { }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(text, style = MaterialTheme.typography.bodySmall)
-        }
+    if (showDeleteConfirm && authorToDelete != null) {
+        ConfirmationDialog(
+            title = "Xóa tác giả",
+            message = "Bạn có chắc chắn muốn xóa tác giả \"${authorToDelete?.authorName}\"? Thao tác này không thể hoàn tác.",
+            onConfirm = {
+                viewModel.deleteAuthor(authorToDelete!!.id) {
+                    showDeleteConfirm = false
+                    authorToDelete = null
+                }
+            },
+            onDismiss = {
+                showDeleteConfirm = false
+                authorToDelete = null
+            }
+        )
     }
 }
 
@@ -291,7 +257,7 @@ fun AuthorItem(author: Author, onEdit: () -> Unit, onDelete: () -> Unit) {
         modifier = Modifier.fillMaxWidth().clickable { onEdit() },
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(0.dp)
+        elevation = CardDefaults.cardElevation(0.5.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -329,18 +295,6 @@ fun AuthorItem(author: Author, onEdit: () -> Unit, onDelete: () -> Unit) {
                 }
             }
         }
-    }
-}
-
-
-
-
-@Composable
-fun IconInfoRow(icon: ImageVector, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
 
@@ -391,10 +345,9 @@ fun AuthorEditDialog(
         containerColor = AdminBg,
         topBar = {
             TopAppBar(
-                title = { Text("Stitch Reader", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
+                title = { Text("Chi tiết Tác giả", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)) },
                 navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
                 actions = {
-                    TextButton(onClick = {}) { Text("Draft", color = Color.Gray) }
                     Button(
                         onClick = onSave,
                         colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
@@ -402,7 +355,7 @@ fun AuthorEditDialog(
                         enabled = !isUploading
                     ) {
                         if (isUploading) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-                        else Text("Save Author", color = Color.White)
+                        else Text("Lưu thay đổi", color = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AdminBg)
@@ -418,19 +371,12 @@ fun AuthorEditDialog(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text(
-                if (author == null) "Create Author Details" else "Edit Author Details",
+                if (author == null) "Thêm Tác giả mới" else "Chỉnh sửa Tác giả",
                 style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif, fontWeight = FontWeight.SemiBold)
             )
-            Text(
-                "Configure the metadata and literary taxonomy for this entry.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
-            )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            LabelText("FULL NAME")
-            TransparentTextField(value = name, onValueChange = { name = it }, placeholder = "Enter author full name...")
+            LabelText("HỌ VÀ TÊN")
+            TransparentTextField(value = name, onValueChange = { name = it }, placeholder = "Nhập tên tác giả...")
 
             Box(
                 modifier = Modifier
@@ -446,24 +392,24 @@ fun AuthorEditDialog(
                 if (selectedImageUri != null) {
                     AsyncImage(model = selectedImageUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else if (imgUrl.isNotEmpty()) {
-                    AsyncImage(model = imgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    AsyncImage(model = if (imgUrl.startsWith("/")) java.io.File(imgUrl) else imgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.AddPhotoAlternate, null, modifier = Modifier.size(48.dp), tint = Color.LightGray)
-                        Text("Add Profile Photo", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Thêm ảnh chân dung", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
 
-            LabelText("COUNTRY")
-            TransparentTextField(value = country, onValueChange = { country = it }, placeholder = "e.g. Vietnam, UK, Japan...")
+            LabelText("QUỐC GIA")
+            TransparentTextField(value = country, onValueChange = { country = it }, placeholder = "Ví dụ: Việt Nam, Mỹ...")
 
-            LabelText("EMAIL ADDRESS")
-            TransparentTextField(value = email, onValueChange = { email = it }, placeholder = "author@stitch.edu")
+            LabelText("ĐỊA CHỈ EMAIL")
+            TransparentTextField(value = email, onValueChange = { email = it }, placeholder = "example@email.com")
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
-                    LabelText("BIRTH DATE")
+                    LabelText("NGÀY SINH")
                     Box(modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }) {
                         OutlinedTextField(
                             value = dob,
@@ -495,14 +441,15 @@ fun AuthorEditDialog(
                             }) { Text("OK") }
                         },
                         dismissButton = {
-                            TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                            TextButton(onClick = { showDatePicker = false }) { Text("Hủy") }
                         }
                     ) {
                         DatePicker(state = datePickerState)
                     }
                 }
+                
                 Column(modifier = Modifier.weight(1f)) {
-                    LabelText("STATUS")
+                    LabelText("TRẠNG THÁI")
                     var expanded by remember { mutableStateOf(false) }
                     Box {
                         OutlinedTextField(
@@ -520,30 +467,23 @@ fun AuthorEditDialog(
                             )
                         )
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            listOf("Active", "On Leave", "Inactive").forEach { s ->
+                            listOf("Active", "Inactive").forEach { s ->
                                 DropdownMenuItem(text = { Text(s) }, onClick = { status = s; expanded = false })
                             }
                         }
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Delete Draft", color = Color.Gray, modifier = Modifier.clickable { onDismiss() })
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
-                    shape = RoundedCornerShape(4.dp),
-                    modifier = Modifier.height(48.dp).fillMaxWidth(0.6f),
-                    enabled = !isUploading
-                ) {
-                    if (isUploading) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    else Text("Confirm Changes")
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
         }
+    }
+}
+
+@Composable
+fun IconInfoRow(icon: ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.Gray)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
