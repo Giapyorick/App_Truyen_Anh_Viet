@@ -39,6 +39,7 @@ fun HomeScreen(
     onNavigateToDetail: (String) -> Unit,
     onNavigateToReading: (String, String) -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onNavigateToFavorites: () -> Unit,
     onNavigateToExplore: () -> Unit,
     onLogout: () -> Unit = {}
 ) {
@@ -46,9 +47,27 @@ fun HomeScreen(
     val auth = remember { FirebaseAuth.getInstance() }
     var stories by remember { mutableStateOf<List<Story>>(emptyList()) }
     var categories by remember { mutableStateOf<List<Category>>(emptyList()) }
+    var authors by remember { mutableStateOf<List<Author>>(emptyList()) }
     var continueStory by remember { mutableStateOf<Story?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var searchQuery by remember { mutableStateOf("") }
+
+    val filteredStories = remember(searchQuery, stories, authors, categories) {
+        if (searchQuery.isBlank()) {
+            stories
+        } else {
+            val query = searchQuery.lowercase().trim()
+            stories.filter { story ->
+                val authorName = authors.find { it.id == story.authorId }?.authorName?.lowercase() ?: ""
+                val categoryNames = categories.filter { it.id in story.getCategoryIdsAsStrings() }
+                    .map { it.name.lowercase() }
+                
+                story.title.lowercase().contains(query) ||
+                        authorName.contains(query) ||
+                        categoryNames.any { it.contains(query) }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         // Fetch Categories
@@ -56,6 +75,15 @@ fun HomeScreen(
             if (value != null) {
                 categories = value.documents.mapNotNull { doc ->
                     doc.toObject(Category::class.java)?.copy(id = doc.id)
+                }
+            }
+        }
+
+        // Fetch Authors
+        db.collection("authors").addSnapshotListener { value, error ->
+            if (value != null) {
+                authors = value.documents.mapNotNull { doc ->
+                    doc.toObject(Author::class.java)?.copy(id = doc.id)
                 }
             }
         }
@@ -162,6 +190,9 @@ fun HomeScreen(
                             Icon(Icons.Default.AdminPanelSettings, contentDescription = "Admin", tint = ReadingDarkGreen)
                         }
                     }
+                    IconButton(onClick = onNavigateToFavorites) {
+                        Icon(Icons.Default.FavoriteBorder, contentDescription = "Favorites", tint = ReadingDarkGreen)
+                    }
                     IconButton(onClick = onLogout) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Logout", tint = ReadingDarkGreen)
                     }
@@ -195,14 +226,16 @@ fun HomeScreen(
                     HomeSearchBar(searchQuery) { searchQuery = it }
                 }
                 item {
-                    if (stories.isNotEmpty()) {
+                    if (searchQuery.isBlank() && stories.isNotEmpty()) {
                         FeaturedSection(story = stories.first(), onClick = { onNavigateToDetail(stories.first().id) })
                     }
                 }
                 item {
-                    GenresSection(categories)
+                    if (searchQuery.isBlank()) {
+                        GenresSection(categories)
+                    }
                 }
-                if (continueStory != null) {
+                if (searchQuery.isBlank() && continueStory != null) {
                     item {
                         ContinueReadingSection(
                             story = continueStory!!,
@@ -213,9 +246,42 @@ fun HomeScreen(
                     }
                 }
                 item {
-                    NewUpdatesSection(stories = stories, onBookClick = onNavigateToDetail)
+                    if (searchQuery.isBlank()) {
+                        NewUpdatesSection(stories = filteredStories, onBookClick = onNavigateToDetail)
+                    } else {
+                        SearchResultsSection(stories = filteredStories, onBookClick = onNavigateToDetail)
+                    }
                 }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchResultsSection(stories: List<Story>, onBookClick: (String) -> Unit) {
+    Column {
+        Text(
+            "Kết quả tìm kiếm (${stories.size})",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Serif,
+            color = ReadingDarkGreen,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        if (stories.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Không tìm thấy kết quả nào", color = Color.Gray)
+            }
+        } else {
+            stories.forEach { story ->
+                HomeBookItem(story = story, onClick = { onBookClick(story.id) })
             }
         }
     }
@@ -571,6 +637,7 @@ fun HomePreview() {
         onNavigateToDetail = {},
         onNavigateToReading = { _, _ -> },
         onNavigateToLibrary = {},
+        onNavigateToFavorites = {},
         onNavigateToExplore = {}
     )
 }

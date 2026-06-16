@@ -124,4 +124,70 @@ class StoryAdminViewModel : ViewModel() {
             }
         }
     }
+
+    fun importMockData() {
+        viewModelScope.launch {
+            val authors = listOf(
+                Author(id = "author_dm", authorName = "Tô Hoài", country = "Việt Nam", status = "Active"),
+                Author(id = "author_nt", authorName = "Nam Cao", country = "Việt Nam", status = "Active"),
+                Author(id = "author_001", authorName = "Nguyễn Nhật Ánh", country = "Việt Nam", status = "Active")
+            )
+
+            val stories = listOf(
+                Story(
+                    id = "story_dm",
+                    title = "Dế Mèn Phiêu Lưu Ký",
+                    authorId = "author_dm",
+                    description = "Cuộc phiêu lưu đầy thú vị của chú Dế Mèn dũng cảm và những người bạn.",
+                    status = "Completed",
+                    img = "https://i.ibb.co/L5SgWrt/demen.jpg",
+                    categoryIds = listOf("cat_002"),
+                    rate = 4.9,
+                    likes = 1250
+                ),
+                Story(
+                    id = "story_hp1",
+                    title = "Harry Potter and the Sorcerer's Stone",
+                    authorId = "author_002",
+                    description = "The boy who lived begins his journey at Hogwarts.",
+                    status = "Completed",
+                    img = "https://i.ibb.co/hVzWbW9/hp1.jpg",
+                    categoryIds = listOf("cat_002"),
+                    rate = 4.8,
+                    likes = 3400
+                ),
+                Story(
+                    id = "story_mb",
+                    title = "Mắt Biếc",
+                    authorId = "author_001",
+                    description = "Câu chuyện tình buồn giữa Ngạn và Hà Lan với đôi mắt biếc sâu thẳm.",
+                    status = "Completed",
+                    img = "https://i.ibb.co/G3Xm86T/matbiec.jpg",
+                    categoryIds = listOf("cat_003"),
+                    rate = 4.7,
+                    likes = 2100
+                ),
+                Story(
+                    id = "story_cp",
+                    title = "Chí Phèo",
+                    authorId = "author_nt",
+                    description = "Kiệt tác của Nam Cao về nỗi khổ và khao khát làm người lương thiện của Chí Phèo.",
+                    status = "Completed",
+                    img = "https://i.ibb.co/Xz9Z6zM/chipheo.jpg",
+                    categoryIds = listOf("cat_001"),
+                    rate = 4.9,
+                    likes = 1800
+                )
+            )
+
+            authors.forEach { author ->
+                db.collection("authors").document(author.id).set(author)
+            }
+            stories.forEach { story ->
+                db.collection("stories").document(story.id).set(story)
+            }
+            fetchStories()
+            fetchAuthors()
+        }
+    }
 }

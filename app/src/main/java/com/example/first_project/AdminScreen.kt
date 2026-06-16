@@ -41,7 +41,9 @@ fun AdminDashboard(
     onBack: () -> Unit,
     onManageStories: () -> Unit,
     onManageAuthors: () -> Unit,
-    onManageCategories: () -> Unit
+    onManageCategories: () -> Unit,
+    onManageUsers: () -> Unit,
+    viewModel: com.example.first_project.admin.StoryAdminViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
 ) {
     Scaffold(
         topBar = {
@@ -59,6 +61,9 @@ fun AdminDashboard(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.importMockData() }) {
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Import Mock Data") 
+                    }
                     IconButton(onClick = {}) { Icon(Icons.Default.Search, contentDescription = "Search") }
                     IconButton(onClick = {}) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
                 },
@@ -184,6 +189,14 @@ fun AdminDashboard(
                     subtitle = "Organize stories into thematic genres and collections.",
                     icon = Icons.Default.Category,
                     onClick = onManageCategories
+                )
+            }
+            item {
+                ManagementItem(
+                    title = "Manage Users",
+                    subtitle = "Monitor readers, manage roles, and handle accounts.",
+                    icon = Icons.Default.People,
+                    onClick = onManageUsers
                 )
             }
 

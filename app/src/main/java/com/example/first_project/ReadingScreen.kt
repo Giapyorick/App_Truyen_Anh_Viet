@@ -1,6 +1,7 @@
 package com.example.first_project
 
 import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -50,6 +51,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
+enum class ReadingTheme { LIGHT, DARK, SEPIA }
+
 @OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun ReadingScreen(
@@ -71,14 +74,26 @@ fun ReadingScreen(
 
     // Reading Settings
     var fontSize by remember { mutableStateOf(18) }
-    var isDarkMode by remember { mutableStateOf(false) }
+    var readingTheme by remember { mutableStateOf(ReadingTheme.LIGHT) }
     var showFontSizeSheet by remember { mutableStateOf(false) }
     var showToCSheet by remember { mutableStateOf(false) }
     var showAISheet by remember { mutableStateOf(false) }
 
-    val bgColor = if (isDarkMode) Color(0xFF121212) else Color(0xFFFDFDF5)
-    val textColor = if (isDarkMode) Color(0xFFE0E0E0) else Color(0xFF1A1A1A)
-    val secondaryTextColor = if (isDarkMode) Color.Gray else Color(0xFF7F8C8D)
+    val bgColor = when (readingTheme) {
+        ReadingTheme.LIGHT -> Color(0xFFFDFDF5)
+        ReadingTheme.DARK -> Color(0xFF121212)
+        ReadingTheme.SEPIA -> Color(0xFFF4ECD8)
+    }
+    val textColor = when (readingTheme) {
+        ReadingTheme.LIGHT -> Color(0xFF1A1A1A)
+        ReadingTheme.DARK -> Color(0xFFE0E0E0)
+        ReadingTheme.SEPIA -> Color(0xFF5B4636)
+    }
+    val secondaryTextColor = when (readingTheme) {
+        ReadingTheme.LIGHT -> Color(0xFF7F8C8D)
+        ReadingTheme.DARK -> Color.Gray
+        ReadingTheme.SEPIA -> Color(0xFF8C7E6A)
+    }
 
     LaunchedEffect(storyId, chapterId) {
         isLoading = true
@@ -128,52 +143,78 @@ fun ReadingScreen(
     // Save progress to Firestore
     val saveProgress = { index: Int ->
         val user = FirebaseAuth.getInstance().currentUser
-        if (user != null && storyId.isNotEmpty() && chapterId.isNotEmpty()) {
+        val currentChap = currentChapter
+        if (user != null && storyId.isNotEmpty() && chapterId.isNotEmpty() && currentChap != null) {
+            val progressData = mapOf(
+                "lastChapterId" to chapterId,
+                "lastChapterNumber" to currentChap.chapterNumber,
+                "lastReadTime" to System.currentTimeMillis(),
+                "scrollIndex" to index,
+                // Optional: Store basic story info if it doesn't exist yet
+                "id" to storyId,
+                "title" to (storyData?.title ?: "")
+            )
+            
             db.collection("users").document(user.uid)
                 .collection("library").document(storyId)
-                .update(
-                    "lastChapterId", chapterId,
-                    "lastChapterNumber", displayChapter.chapterNumber,
-                    "lastReadTime", System.currentTimeMillis(),
-                    "scrollIndex", index
-                ).addOnFailureListener {
-                    // Handle failure if needed
+                .set(progressData, com.google.firebase.firestore.SetOptions.merge())
+                .addOnFailureListener { e ->
+                    android.util.Log.e("ReadingScreen", "Error saving progress", e)
                 }
         }
     }
 
-    LaunchedEffect(listState) {
+    LaunchedEffect(listState, chapterId, currentChapter) {
         snapshotFlow { listState.firstVisibleItemIndex }
-            .debounce(2000L) // Save every 2 seconds of inactivity
+            .debounce(2000L) // Đợi 2 giây sau khi ngừng cuộn để lưu
             .distinctUntilChanged()
             .collectLatest { index ->
-                if (displayChapter.chapterNumber > 0) {
+                if (currentChapter != null) {
                     saveProgress(index)
                 }
             }
     }
 
-    LaunchedEffect(isLoading) {
-        if (!isLoading && storyId.isNotEmpty()) {
-             val user = FirebaseAuth.getInstance().currentUser
-             if (user != null) {
-                 try {
-                     val doc = db.collection("users").document(user.uid)
-                         .collection("library").document(storyId)
-                         .get().await()
-                     val savedIndex = doc.getLong("scrollIndex")?.toInt() ?: 0
-                     if (savedIndex > 0 && savedIndex < (currentChapter?.paragraphs?.size ?: 0) + 1) {
-                         listState.scrollToItem(savedIndex)
-                     }
-                 } catch (e: Exception) {
-                     e.printStackTrace()
-                     // Ignore error when fetching progress, just start from beginning
-                 }
-             }
+
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    var isFirstEntry by remember { mutableStateOf(true) }
+
+    // Xử lý cuộn trang khi load chương mới hoặc khôi phục tiến độ
+    LaunchedEffect(isLoading, currentChapter) {
+        if (!isLoading && currentChapter != null) {
+            if (isFirstEntry) {
+                val user = FirebaseAuth.getInstance().currentUser
+                if (user != null) {
+                    try {
+                        val doc = db.collection("users").document(user.uid)
+                            .collection("library").document(storyId)
+                            .get().await()
+                        val savedChapterId = doc.getString("lastChapterId")
+                        val savedIndex = doc.getLong("scrollIndex")?.toInt() ?: 0
+                        
+                        if (savedChapterId == chapterId && savedIndex > 0) {
+                            if (savedIndex < (currentChapter?.paragraphs?.size ?: 0) + 1) {
+                                listState.scrollToItem(savedIndex)
+                            }
+                        } else {
+                            listState.scrollToItem(0)
+                        }
+                    } catch (e: Exception) {
+                        listState.scrollToItem(0)
+                    }
+                } else {
+                    listState.scrollToItem(0)
+                }
+                isFirstEntry = false
+            } else {
+                // Khi người dùng bấm sang chương khác trong cùng một phiên đọc
+                listState.scrollToItem(0)
+            }
         }
     }
 
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val isDarkMode = readingTheme == ReadingTheme.DARK
 
     Scaffold(
         topBar = {
@@ -192,7 +233,7 @@ fun ReadingScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = if (isDarkMode) Color.White else ReadingDarkGreen)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = if (readingTheme == ReadingTheme.DARK) Color.White else ReadingDarkGreen)
                     }
                 },
                 actions = {
@@ -204,29 +245,21 @@ fun ReadingScreen(
         bottomBar = {
             ReadingControlsBar(
                 onFontSizeClick = { showFontSizeSheet = true },
-                onThemeToggle = { isDarkMode = !isDarkMode },
-                onToCClick = { showToCSheet = true },
-                onSaveClick = {
-                    val user = FirebaseAuth.getInstance().currentUser
-                    if (user != null && storyData != null) {
-                        try {
-                            db.collection("users").document(user.uid)
-                                .collection("library").document(storyId)
-                                .set(storyData!!)
-                                .addOnSuccessListener {
-                                    Toast.makeText(context, "Đã lưu vào thư viện", Toast.LENGTH_SHORT).show()
-                                }
-                                .addOnFailureListener { e ->
-                                    Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
-                                }
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Lỗi: ${e.message}", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        Toast.makeText(context, "Vui lòng đăng nhập để lưu", Toast.LENGTH_SHORT).show()
+                onThemeToggle = { 
+                    readingTheme = when(readingTheme) {
+                        ReadingTheme.LIGHT -> ReadingTheme.SEPIA
+                        ReadingTheme.SEPIA -> ReadingTheme.DARK
+                        ReadingTheme.DARK -> ReadingTheme.LIGHT
                     }
                 },
-                isDarkMode = isDarkMode
+                onToCClick = { showToCSheet = true },
+                onTranslateAllClick = {
+                    val anyEnglish = displayChapter.paragraphs.indices.any { isVietnameseMap[it] != true }
+                    displayChapter.paragraphs.indices.forEach { idx ->
+                        isVietnameseMap[idx] = anyEnglish
+                    }
+                },
+                readingTheme = readingTheme
             )
         },
         floatingActionButton = {
@@ -242,7 +275,26 @@ fun ReadingScreen(
         },
         containerColor = bgColor
     ) { paddingValues ->
+        val scrollProgress = remember {
+            derivedStateOf {
+                if (listState.layoutInfo.totalItemsCount == 0) 0f
+                else {
+                    val firstVisible = listState.firstVisibleItemIndex.toFloat()
+                    val total = listState.layoutInfo.totalItemsCount.toFloat()
+                    (firstVisible / (total - 1)).coerceIn(0f, 1f)
+                }
+            }
+        }
+
         Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+            // Idea 5: Progress Bar
+            LinearProgressIndicator(
+                progress = { scrollProgress.value },
+                modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.TopCenter),
+                color = ReadingDarkGreen,
+                trackColor = Color.Transparent
+            )
+
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = ReadingDarkGreen)
             } else if (errorMessage != null) {
@@ -253,143 +305,155 @@ fun ReadingScreen(
                     textAlign = TextAlign.Center
                 )
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
-                    state = listState
-                ) {
-                    item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                "Chương ${displayChapter.chapterNumber}".uppercase(),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = secondaryTextColor,
-                                letterSpacing = 3.sp,
-                                fontFamily = literataFont
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                displayChapter.title,
-                                style = MaterialTheme.typography.headlineMedium.copy(
-                                    fontFamily = literataFont,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = if (isDarkMode) Color.White else Color(0xFF2C3E50)
-                                ),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        val annotatedString = buildAnnotatedString {
-                            displayChapter.paragraphs.forEachIndexed { index, paragraph ->
-                                val isVietnamese = isVietnameseMap[index] == true
-                                val rawText = if (isVietnamese) paragraph.vietnamese else paragraph.english
-                                val cleanedText = rawText.replace(Regex("\\s+"), " ").trim()
-                                
-                                if (cleanedText.isEmpty()) return@forEachIndexed
-
-                                pushStringAnnotation(tag = "para", annotation = index.toString())
-                                
-                                withStyle(style = SpanStyle(
-                                    fontFamily = literataFont,
-                                    fontSize = fontSize.sp,
-                                    color = if (isVietnamese) {
-                                        if (isDarkMode) Color(0xFF81C784) else ReadingDarkGreen
-                                    } else textColor,
-                                    fontStyle = if (isVietnamese) FontStyle.Italic else FontStyle.Normal,
-                                )) {
-                                    append(" ")
-                                    append(cleanedText)
-                                }
-                                pop()
-                            }
-                        }
-
-                        val clipboardManager = LocalClipboardManager.current
-                        Text(
-                            text = annotatedString,
-                            onTextLayout = { textLayoutResult = it },
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                lineHeight = (fontSize * 1.8).sp,
-                                textAlign = TextAlign.Justify,
-                                letterSpacing = 0.2.sp
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onTap = { offset ->
-                                            val layoutResult = textLayoutResult ?: return@detectTapGestures
-                                            val position = layoutResult.getOffsetForPosition(offset)
-                                            annotatedString.getStringAnnotations(tag = "para", start = position, end = position)
-                                                .firstOrNull()?.let { annotation ->
-                                                    val idx = annotation.item.toInt()
-                                                    isVietnameseMap[idx] = !(isVietnameseMap[idx] ?: false)
-                                                }
-                                        },
-                                        onDoubleTap = { offset ->
-                                            val layoutResult = textLayoutResult ?: return@detectTapGestures
-                                            val position = layoutResult.getOffsetForPosition(offset)
-                                            annotatedString.getStringAnnotations(tag = "para", start = position, end = position)
-                                                .firstOrNull()?.let { annotation ->
-                                                    val idx = annotation.item.toInt()
-                                                    val paragraph = displayChapter.paragraphs.getOrNull(idx)
-                                                    if (paragraph != null) {
-                                                        val isVietnamese = isVietnameseMap[idx] == true
-                                                        val textToCopy = if (isVietnamese) paragraph.vietnamese else paragraph.english
-                                                        clipboardManager.setText(AnnotatedString(textToCopy))
-                                                        Toast.makeText(context, "Đã sao chép đoạn văn", Toast.LENGTH_SHORT).show()
-                                                    }
-                                                }
-                                        }
-                                    )
-                                }
-                        )
-                    }
-
-                    val prevChapter = chapters.find { it.chapterNumber == displayChapter.chapterNumber - 1 }
-                    val nextChapter = chapters.find { it.chapterNumber == displayChapter.chapterNumber + 1 }
-
-                    if (prevChapter != null || nextChapter != null) {
+                // Idea 7: Transition Animation
+                AnimatedContent(
+                    targetState = chapterId,
+                    transitionSpec = {
+                        (fadeIn() + slideInHorizontally { it }).togetherWith(fadeOut() + slideOutHorizontally { -it })
+                    },
+                    label = "ChapterTransition"
+                ) { targetChapterId ->
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 32.dp),
+                        state = listState
+                    ) {
                         item {
-                            Spacer(modifier = Modifier.height(48.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                if (prevChapter != null) {
-                                    Button(
-                                        onClick = { onChapterChange(prevChapter.id) },
-                                        modifier = Modifier.weight(1f).height(56.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = ReadingDarkGreen),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("CHƯƠNG TRƯỚC", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
-                                    }
-                                }
+                                Text(
+                                    "Chương ${displayChapter.chapterNumber}".uppercase(),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = secondaryTextColor,
+                                    letterSpacing = 3.sp,
+                                    fontFamily = literataFont,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    displayChapter.title,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontFamily = literataFont,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (readingTheme == ReadingTheme.DARK) Color.White else Color(0xFF2C3E50)
+                                    ),
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
 
-                                if (nextChapter != null) {
-                                    Button(
-                                        onClick = { onChapterChange(nextChapter.id) },
-                                        modifier = Modifier.weight(1f).height(56.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = ReadingDarkGreen),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text("CHƯƠNG TIẾP", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                            val annotatedString = buildAnnotatedString {
+                                displayChapter.paragraphs.forEachIndexed { index, paragraph ->
+                                    val isVietnamese = isVietnameseMap[index] == true
+                                    val rawText = if (isVietnamese) paragraph.vietnamese else paragraph.english
+                                    val cleanedText = rawText.replace(Regex("\\s+"), " ").trim()
+                                    
+                                    if (cleanedText.isEmpty()) return@forEachIndexed
+
+                                    pushStringAnnotation(tag = "para", annotation = index.toString())
+                                    
+                                    withStyle(style = SpanStyle(
+                                        fontFamily = literataFont,
+                                        fontSize = fontSize.sp,
+                                        color = if (isVietnamese) {
+                                            if (readingTheme == ReadingTheme.DARK) Color(0xFF81C784) else ReadingDarkGreen
+                                        } else textColor,
+                                        fontStyle = if (isVietnamese) FontStyle.Italic else FontStyle.Normal,
+                                    )) {
+                                        append(" ")
+                                        append(cleanedText)
                                     }
+                                    pop()
                                 }
                             }
-                            Spacer(modifier = Modifier.height(100.dp))
+
+                            val clipboardManager = LocalClipboardManager.current
+                            val scope = rememberCoroutineScope()
+                            Text(
+                                text = annotatedString,
+                                onTextLayout = { textLayoutResult = it },
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    lineHeight = (fontSize * 1.8).sp,
+                                    textAlign = TextAlign.Justify,
+                                    letterSpacing = 0.2.sp
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = { offset ->
+                                                val layoutResult = textLayoutResult ?: return@detectTapGestures
+                                                val position = layoutResult.getOffsetForPosition(offset)
+                                                annotatedString.getStringAnnotations(tag = "para", start = position, end = position)
+                                                    .firstOrNull()?.let { annotation ->
+                                                        val idx = annotation.item.toInt()
+                                                        isVietnameseMap[idx] = !(isVietnameseMap[idx] ?: false)
+                                                    }
+                                            },
+                                            onDoubleTap = { offset ->
+                                                val layoutResult = textLayoutResult ?: return@detectTapGestures
+                                                val position = layoutResult.getOffsetForPosition(offset)
+                                                annotatedString.getStringAnnotations(tag = "para", start = position, end = position)
+                                                    .firstOrNull()?.let { annotation ->
+                                                        val idx = annotation.item.toInt()
+                                                        val paragraph = displayChapter.paragraphs.getOrNull(idx)
+                                                        if (paragraph != null) {
+                                                            val isVietnamese = isVietnameseMap[idx] == true
+                                                            val textToCopy = if (isVietnamese) paragraph.vietnamese else paragraph.english
+                                                            clipboardManager.setText(AnnotatedString(textToCopy))
+                                                            Toast.makeText(context, "Đã sao chép đoạn văn", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                            }
+                                        )
+                                    }
+                            )
                         }
-                    } else {
-                        item { Spacer(modifier = Modifier.height(100.dp)) }
+
+                        val prevChapter = chapters.find { it.chapterNumber == displayChapter.chapterNumber - 1 }
+                        val nextChapter = chapters.find { it.chapterNumber == displayChapter.chapterNumber + 1 }
+
+                        if (prevChapter != null || nextChapter != null) {
+                            item {
+                                Spacer(modifier = Modifier.height(48.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    if (prevChapter != null) {
+                                        Button(
+                                            onClick = { onChapterChange(prevChapter.id) },
+                                            modifier = Modifier.weight(1f).height(56.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = ReadingDarkGreen),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("CHƯƠNG TRƯỚC", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
+                                        }
+                                    }
+
+                                    if (nextChapter != null) {
+                                        Button(
+                                            onClick = { onChapterChange(nextChapter.id) },
+                                            modifier = Modifier.weight(1f).height(56.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = ReadingDarkGreen),
+                                            shape = RoundedCornerShape(12.dp)
+                                        ) {
+                                            Text("CHƯƠNG TIẾP", fontWeight = FontWeight.Bold, letterSpacing = 1.sp, fontSize = 12.sp)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(100.dp))
+                            }
+                        } else {
+                            item { Spacer(modifier = Modifier.height(100.dp)) }
+                        }
                     }
                 }
             }
@@ -417,7 +481,7 @@ fun ReadingScreen(
             FontSizeControl(
                 currentSize = fontSize,
                 onSizeChange = { fontSize = it },
-                isDarkMode = isDarkMode
+                readingTheme = readingTheme
             )
         }
     }
@@ -434,7 +498,7 @@ fun ReadingScreen(
                     showToCSheet = false
                     onChapterChange(newChapterId)
                 },
-                isDarkMode = isDarkMode
+                readingTheme = readingTheme
             )
         }
     }
@@ -447,13 +511,13 @@ fun ReadingScreen(
             containerColor = bgColor,
             dragHandle = { BottomSheetDefaults.DragHandle() }
         ) {
-            AIChatAssistant(isDarkMode = isDarkMode)
+            AIChatAssistant(readingTheme = readingTheme)
         }
     }
 }
 
 @Composable
-fun AIChatAssistant(isDarkMode: Boolean) {
+fun AIChatAssistant(readingTheme: ReadingTheme) {
     var userInput by remember { mutableStateOf("") }
     var chatResponse by remember { mutableStateOf("Chào bạn! Tôi là trợ lý AI. Hãy dán đoạn văn tiếng Anh bạn muốn dịch và tìm hiểu sâu hơn vào đây.") }
     var isThinking by remember { mutableStateOf(false) }
@@ -461,8 +525,10 @@ fun AIChatAssistant(isDarkMode: Boolean) {
     val groqApi = remember { GroqApi.create() }
     val scope = rememberCoroutineScope()
     
+    val isDarkMode = readingTheme == ReadingTheme.DARK
+
     // === BƯỚC QUAN TRỌNG: DÁN API KEY CỦA BẠN VÀO GIỮA DẤU "" DƯỚI ĐÂY ===
-    val rawApiKey = "Keyyyyy"
+    val rawApiKey = "key"
     
     // Tự động xử lý Header để đảm bảo định dạng "Bearer <API_KEY>"
     val authHeader = remember(rawApiKey) {
@@ -604,13 +670,18 @@ fun ReadingControlsBar(
     onFontSizeClick: () -> Unit,
     onThemeToggle: () -> Unit,
     onToCClick: () -> Unit,
-    onSaveClick: () -> Unit,
-    isDarkMode: Boolean
+    onTranslateAllClick: () -> Unit,
+    readingTheme: ReadingTheme
 ) {
+    val isDarkMode = readingTheme == ReadingTheme.DARK
     Surface(
         tonalElevation = 8.dp,
         modifier = Modifier.fillMaxWidth(),
-        color = if (isDarkMode) Color(0xFF1E1E1E) else Color.White
+        color = when(readingTheme) {
+            ReadingTheme.LIGHT -> Color.White
+            ReadingTheme.DARK -> Color(0xFF1E1E1E)
+            ReadingTheme.SEPIA -> Color(0xFFE8DCC4)
+        }
     ) {
         Row(
             modifier = Modifier
@@ -619,15 +690,22 @@ fun ReadingControlsBar(
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceAround
         ) {
-            ControlItem(Icons.Default.TextFields, "Cỡ chữ", isDarkMode, onFontSizeClick)
-            ControlItem(
-                if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                if (isDarkMode) "Sáng" else "Tối",
-                isDarkMode,
-                onThemeToggle
-            )
-            ControlItem(Icons.Default.FormatListBulleted, "Mục lục", isDarkMode, onToCClick)
-            ControlItem(Icons.Default.BookmarkBorder, "Lưu", isDarkMode, onSaveClick)
+            ControlItem(Icons.Default.TextFields, "Cỡ chữ", readingTheme, onFontSizeClick)
+            
+            val themeIcon = when(readingTheme) {
+                ReadingTheme.LIGHT -> Icons.Default.MenuBook
+                ReadingTheme.SEPIA -> Icons.Default.DarkMode
+                ReadingTheme.DARK -> Icons.Default.LightMode
+            }
+            val themeLabel = when(readingTheme) {
+                ReadingTheme.LIGHT -> "Sepia"
+                ReadingTheme.SEPIA -> "Tối"
+                ReadingTheme.DARK -> "Sáng"
+            }
+            
+            ControlItem(themeIcon, themeLabel, readingTheme, onThemeToggle)
+            ControlItem(Icons.Default.FormatListBulleted, "Mục lục", readingTheme, onToCClick)
+            ControlItem(Icons.Default.Translate, "Dịch hết", readingTheme, onTranslateAllClick)
         }
     }
 }
@@ -636,9 +714,10 @@ fun ReadingControlsBar(
 fun ControlItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    isDarkMode: Boolean,
+    readingTheme: ReadingTheme,
     onClick: () -> Unit
 ) {
+    val isDarkMode = readingTheme == ReadingTheme.DARK
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.clickable { onClick() }
@@ -651,14 +730,15 @@ fun ControlItem(
         Text(
             label,
             fontSize = 10.sp,
-            color = if (isDarkMode) Color.LightGray else Color.Gray,
+            color = if (isDarkMode) Color.LightGray else (if(readingTheme == ReadingTheme.SEPIA) Color(0xFF5B4636) else Color.Gray),
             fontWeight = FontWeight.Medium
         )
     }
 }
 
 @Composable
-fun FontSizeControl(currentSize: Int, onSizeChange: (Int) -> Unit, isDarkMode: Boolean) {
+fun FontSizeControl(currentSize: Int, onSizeChange: (Int) -> Unit, readingTheme: ReadingTheme) {
+    val isDarkMode = readingTheme == ReadingTheme.DARK
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -697,8 +777,9 @@ fun TableOfContents(
     chapters: List<Chapter>,
     currentChapterId: String,
     onChapterSelect: (String) -> Unit,
-    isDarkMode: Boolean
+    readingTheme: ReadingTheme
 ) {
+    val isDarkMode = readingTheme == ReadingTheme.DARK
     Column(
         modifier = Modifier
             .fillMaxWidth()

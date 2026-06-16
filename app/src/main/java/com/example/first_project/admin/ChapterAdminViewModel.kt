@@ -155,6 +155,50 @@ class ChapterAdminViewModel : ViewModel() {
         }
     }
 
+    fun importParagraphsFromTxt(
+        context: Context,
+        enUri: Uri,
+        viUri: Uri,
+        onSuccess: (List<Paragraph>) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val enText = readTextFromUri(context, enUri)
+                val viText = readTextFromUri(context, viUri)
+
+                val enSentences = splitIntoSentences(enText)
+                val viSentences = splitIntoSentences(viText)
+
+                if (enSentences.size != viSentences.size) {
+                    onError("Số lượng câu không khớp: Anh (${enSentences.size}) vs Việt (${viSentences.size})")
+                    return@launch
+                }
+
+                val paragraphs = enSentences.zip(viSentences).mapIndexed { index, pair ->
+                    Paragraph(paragraphOrder = index + 1, english = pair.first, vietnamese = pair.second)
+                }
+                onSuccess(paragraphs)
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Lỗi không xác định")
+            }
+        }
+    }
+
+    private fun readTextFromUri(context: Context, uri: Uri): String {
+        return context.contentResolver.openInputStream(uri)?.use { inputStream ->
+            inputStream.bufferedReader().use { it.readText() }
+        } ?: ""
+    }
+
+    private fun splitIntoSentences(text: String): List<String> {
+        // Regex này cắt theo . ! ? và giữ lại dấu câu nếu cần, 
+        // nhưng đơn giản nhất là cắt và trim.
+        // Dùng lookbehind để giữ lại dấu câu: (?<=[.!?])
+        val regex = Regex("(?<=[.!?])\\s+")
+        return text.split(regex).map { it.trim() }.filter { it.isNotEmpty() }
+    }
+
     private fun readExcelColumn(context: Context, uri: Uri): List<String> {
         val list = mutableListOf<String>()
         val formatter = org.apache.poi.ss.usermodel.DataFormatter()

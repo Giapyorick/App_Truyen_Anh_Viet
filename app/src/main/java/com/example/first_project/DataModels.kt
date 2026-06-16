@@ -126,3 +126,33 @@ data class Category(
     val description: String = "",
     val status: String = "Active"
 )
+
+data class User(
+    val id: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val email: String = "",
+    val image: String = "",
+    val gender: String = "",
+    val role: String = "user",
+    val status: String = "Active"
+) {
+    @Exclude
+    fun resolveImagePath(): Any {
+        return when {
+            image.startsWith("assets/") -> "file:///android_asset/${image.removePrefix("assets/")}"
+            image.startsWith("/") -> java.io.File(image)
+            else -> image
+        }
+    }
+}
+
+data class Comment(
+    var id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val userImage: String = "",
+    val content: String = "",
+    val rating: Int = 0,
+    val timestamp: Long = System.currentTimeMillis()
+)

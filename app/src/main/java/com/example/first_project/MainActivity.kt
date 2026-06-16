@@ -24,6 +24,7 @@ import com.example.first_project.admin.AuthorAdminScreen
 import com.example.first_project.admin.CategoryAdminScreen
 import com.example.first_project.admin.StoryAdminScreen
 import com.example.first_project.admin.ChapterAdminScreen
+import com.example.first_project.admin.UserAdminScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,9 +58,13 @@ class MainActivity : ComponentActivity() {
                         onBack = { currentScreen = "home" },
                         onManageStories = { currentScreen = "admin_stories" },
                         onManageAuthors = { currentScreen = "admin_authors" },
-                        onManageCategories = { currentScreen = "admin_categories" }
+                        onManageCategories = { currentScreen = "admin_categories" },
+                        onManageUsers = { currentScreen = "admin_users" }
                     )
                     "admin_authors" -> AuthorAdminScreen(
+                        onBack = { currentScreen = "admin" }
+                    )
+                    "admin_users" -> UserAdminScreen(
                         onBack = { currentScreen = "admin" }
                     )
                     "admin_stories" -> StoryAdminScreen(
@@ -93,16 +98,32 @@ class MainActivity : ComponentActivity() {
                             currentScreen = "reading"
                         },
                         onNavigateToLibrary = { currentScreen = "library" },
-                        onNavigateToExplore = { /* TODO */ },
+                        onNavigateToFavorites = { currentScreen = "favorites" },
+                        onNavigateToExplore = { currentScreen = "explore" },
                         onLogout = {
                             authViewModel.logout()
                             currentScreen = "login"
                         }
                     )
+                    "explore" -> ExploreScreen(
+                        onNavigateToHome = { currentScreen = "home" },
+                        onNavigateToLibrary = { currentScreen = "library" },
+                        onNavigateToDetail = { storyId ->
+                            selectedStoryId = storyId
+                            currentScreen = "detail"
+                        }
+                    )
                     "library" -> LibraryScreen(
                         onNavigateToHome = { currentScreen = "home" },
-                        onNavigateToExplore = { /* TODO */ },
+                        onNavigateToExplore = { currentScreen = "explore" },
                         onNavigateToDetail = { storyId ->
+                            selectedStoryId = storyId
+                            currentScreen = "detail"
+                        }
+                    )
+                    "favorites" -> FavoriteScreen(
+                        onBack = { currentScreen = "home" },
+                        onStoryClick = { storyId ->
                             selectedStoryId = storyId
                             currentScreen = "detail"
                         }

@@ -18,8 +18,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.first_project.ui.theme.ReadingDarkGreen
 import com.example.first_project.ui.theme.LightGreenBg
 import com.google.firebase.auth.FirebaseAuth
@@ -116,7 +118,7 @@ fun LibraryScreen(
                 } else {
                     item {
                         Text(
-                            "Danh sách lưu (\${libraryStories.size})",
+                            "Danh sách lưu",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Serif,
@@ -125,11 +127,20 @@ fun LibraryScreen(
                         )
                     }
                     items(libraryStories) { story ->
+                        val progressValue = if (story.chapters.isNotEmpty() && story.lastChapterNumber != null) {
+                            story.lastChapterNumber.toFloat() / story.chapters.size.toFloat()
+                        } else 0f
+                        
+                        val progressText = if (story.lastChapterNumber != null) {
+                            "Đã đọc ${story.lastChapterNumber}/${story.chapters.size} chương"
+                        } else {
+                            "Chưa bắt đầu (${story.chapters.size} chương)"
+                        }
+
                         ReadingItem(
-                            title = story.title,
-                            author = "Tiến độ: \${story.lastChapterNumber ?: 0} chương",
-                            progressValue = 0.5f, // Placeholder for actual progress calculation
-                            chapter = story.lastChapterId?.let { "Đang đọc chương \${story.lastChapterNumber}" } ?: "Chưa đọc",
+                            story = story,
+                            progressValue = progressValue,
+                            progressText = progressText,
                             onClick = { onNavigateToDetail(story.id) }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
@@ -163,7 +174,7 @@ fun LibrarySearchBar() {
 }
 
 @Composable
-fun ReadingItem(title: String, author: String, progressValue: Float, chapter: String, onClick: () -> Unit) {
+fun ReadingItem(story: Story, progressValue: Float, progressText: String, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -178,32 +189,45 @@ fun ReadingItem(title: String, author: String, progressValue: Float, chapter: St
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
+            AsyncImage(
+                model = story.resolveImagePath(),
+                contentDescription = null,
                 modifier = Modifier
-                    .size(60.dp, 80.dp)
+                    .size(60.dp, 85.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(ReadingDarkGreen),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Book, contentDescription = null, tint = Color.White.copy(alpha = 0.3f))
-            }
+                    .background(Color.LightGray),
+                contentScale = ContentScale.Crop
+            )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, fontFamily = FontFamily.Serif)
-                Text(author, color = Color.Gray, fontSize = 12.sp)
+                Text(
+                    story.title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    fontFamily = FontFamily.Serif,
+                    maxLines = 1
+                )
+                Text(
+                    if (story.status.isNotEmpty()) "Tình trạng: ${story.status}" else "Sách điện tử",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(chapter, fontSize = 10.sp, color = Color.Gray)
+                    Text(progressText, fontSize = 11.sp, color = ReadingDarkGreen, fontWeight = FontWeight.Medium)
+                    Text("${(progressValue * 100).toInt()}%", fontSize = 11.sp, color = Color.Gray)
                 }
+                Spacer(modifier = Modifier.height(4.dp))
                 LinearProgressIndicator(
                     progress = { progressValue },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp)),
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
                     color = ReadingDarkGreen,
                     trackColor = LightGreenBg
                 )

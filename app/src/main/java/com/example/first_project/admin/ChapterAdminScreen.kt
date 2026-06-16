@@ -289,10 +289,14 @@ fun ChapterEditDialog(
     val context = LocalContext.current
     var enUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var viUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var enTxtUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var viTxtUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var isProcessing by remember { mutableStateOf(false) }
 
     val enPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { enUri = it }
     val viPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { viUri = it }
+    val enTxtPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { enTxtUri = it }
+    val viTxtPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { viTxtUri = it }
 
     val onSave = {
         val newChapter = (chapter?.copy(
@@ -423,7 +427,83 @@ fun ChapterEditDialog(
                             enabled = !isProcessing
                         ) {
                             if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
-                            else Text("Process & Pair Rows")
+                            else Text("Process & Pair Excel Rows")
+                        }
+                    }
+                }
+            }
+
+            // New Bulk Import (Text) Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Description, null, modifier = Modifier.size(18.dp), tint = DarkGreen)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        LabelText("Bulk Import (Text Files)")
+                    }
+
+                    Text(
+                        "Upload .txt files. Content will be split by sentences (., ?, !) and paired.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { enTxtPicker.launch("text/plain") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(4.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (enTxtUri != null) SuccessGreen else Color.White,
+                                contentColor = if (enTxtUri != null) SuccessText else Color.Black
+                            ),
+                            border = BorderStroke(1.dp, if (enTxtUri != null) SuccessText else Color.LightGray)
+                        ) {
+                            Text(if (enTxtUri != null) "EN TXT Ready" else "Select EN TXT", fontSize = 11.sp, maxLines = 1)
+                        }
+                        Button(
+                            onClick = { viTxtPicker.launch("text/plain") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(4.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viTxtUri != null) SuccessGreen else Color.White,
+                                contentColor = if (viTxtUri != null) SuccessText else Color.Black
+                            ),
+                            border = BorderStroke(1.dp, if (viTxtUri != null) SuccessText else Color.LightGray)
+                        ) {
+                            Text(if (viTxtUri != null) "VI TXT Ready" else "Select VI TXT", fontSize = 11.sp, maxLines = 1)
+                        }
+                    }
+
+                    if (enTxtUri != null && viTxtUri != null) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                isProcessing = true
+                                viewModel.importParagraphsFromTxt(context, enTxtUri!!, viTxtUri!!,
+                                    onSuccess = {
+                                        paragraphs = it
+                                        isProcessing = false
+                                        enTxtUri = null
+                                        viTxtUri = null
+                                    },
+                                    onError = { error ->
+                                        isProcessing = false
+                                        android.widget.Toast.makeText(context, error, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkGreen),
+                            shape = RoundedCornerShape(4.dp),
+                            enabled = !isProcessing
+                        ) {
+                            if (isProcessing) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
+                            else Text("Split & Pair Sentences")
                         }
                     }
                 }
